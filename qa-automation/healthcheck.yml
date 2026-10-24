@@ -1,15 +1,113 @@
 ---
-# HEALTHCHECK — Quick environment readiness check
-# Runs post-provisioning to verify the lab environment is functional.
-# Should complete in under 60 seconds.
+# ============================================================================
+# HEALTHCHECK — Post-provisioning environment readiness check
+# ============================================================================
 #
-# Exit 0 = healthy, non-zero = unhealthy.
+# Purpose:
+#   Validates that the base Red Hat AI Enterprise environment is healthy
+#   BEFORE students start (Getting Connected / Module 1). This runs
+#   automatically via the showroom runtime automation endpoint:
+#     /stream/qa/healthcheck
+#
+# Scope:
+#   Only checks resources deployed by provisioning automation: RHOAI 3.5
+#   (DataScienceCluster), the GPU worker node, the RHOAI dashboard route,
+#   and the MaaS API. Does NOT check anything students deploy during the
+#   lab (model, app) — the e2e.yml playbook validates those after the lab.
+#
+# When it runs:
+#   - Triggered by ops via the ZT Runner /stream/qa/healthcheck endpoint
+#   - Can also be run manually: ansible-playbook qa-automation/healthcheck.yml
+#
+# Exit codes:
+#   0 = environment ready for students
+#   2 = one or more checks failed — investigate before seating students
+#       (failed tasks make ansible-playbook exit with its failed-hosts code)
+#
+# Adding checks for your lab:
+#   1. Only add checks for resources YOUR provisioning automation deploys
+#   2. Use kubernetes.core.k8s_info for pod/route/service checks (idempotent,
+#      no side effects)
+#   3. Use ansible.builtin.command for oc CLI checks (e.g. oc whoami)
+#   4. Every check should have a clear, descriptive name ops can read at a
+#      glance
+#   5. Keep it fast — healthcheck should complete in under 30 seconds
+# ============================================================================
 
-- name: "Environment Health Check"
+- name: Environment Health Check
   hosts: localhost
   connection: local
   gather_facts: false
+  module_defaults:
+    group/kubernetes.core.k8s:
+      kubeconfig: "{{ k8s_kubeconfig | default(omit) }}"
   tasks:
-    - name: "TODO: Implement health checks"
-      ansible.builtin.debug:
-        msg: "Replace this task with checks that verify the environment is ready"
+
+    # -- Check 1: Can we reach the cluster at all, and is the session -------
+    # -- authenticated? ------------------------------------------------------
+    - name: OpenShift API is reachable and session is authenticated
+      ansible.builtin.command: oc whoami
+      changed_when: false
+
+    # -- Check 2: OpenShift AI platform (RHOAI 3.5) --------------------------
+    # The DataScienceCluster represents the installed OpenShift AI components
+    # (`oc get dsc` in the lab). Model serving in Module 1 depends on it
+    # reporting Ready — accept either the phase or the Ready condition.
+    - name: OpenShift AI DataScienceCluster exists and is Ready
+      kubernetes.core.k8s_info:
+        api_version: datasciencecluster.opendatahub.io/v1
+        kind: DataScienceCluster
+      register: dsc
+      failed_when: >-
+        dsc.resources | length == 0 or
+        not (
+          dsc.resources[0].status.phase | default('') == 'Ready' or
+          dsc.resources[0].status.conditions | default([])
+          | selectattr('type', 'eq', 'Ready') | selectattr('status', 'eq', 'True')
+          | list | length > 0
+        )
+
+    # -- Check 3: GPU worker node --------------------------------------------
+    # Module 1 schedules the model server on the NVIDIA L40S 48 GB GPU node
+    # (`oc get nodes -L nvidia.com/gpu.product`). At least one node must
+    # advertise nvidia.com/gpu capacity greater than zero.
+    - name: GPU worker node advertises NVIDIA GPU capacity
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Node
+      register: nodes
+      failed_when: >-
+        nodes.resources | length == 0 or
+        nodes.resources
+        | map(attribute='status.capacity.nvidia.com/gpu', default='0')
+        | map('int') | select('gt', 0) | list | length == 0
+
+    # -- Check 4: RHOAI dashboard route --------------------------------------
+    # Students log in and land on the RHOAI dashboard (Getting Connected).
+    # The route must exist and be admitted by the router.
+    - name: RHOAI dashboard route exists and is admitted
+      kubernetes.core.k8s_info:
+        api_version: route.openshift.io/v1
+        kind: Route
+        name: rhods-dashboard
+        namespace: redhat-ods-applications
+      register: dashboard_route
+      failed_when: >-
+        dashboard_route.resources | length == 0 or
+        dashboard_route.resources[0].status.ingress | default([]) | length == 0
+
+    # -- Check 5: MaaS API (RHOAI 3.5) ---------------------------------------
+    # The MaaS API (maas-api) runs in redhat-ods-applications. The external
+    # gateway endpoint (maas.apps.<cluster-domain>) is validated end-to-end
+    # by the e2e playbook (Module 3), not here — this check only confirms
+    # the API is deployed.
+    - name: MaaS API service is present in redhat-ods-applications
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Service
+        namespace: redhat-ods-applications
+      register: maas_services
+      failed_when: >-
+        maas_services.resources | length == 0 or
+        maas_services.resources
+        | selectattr('metadata.name', 'match', '^maas') | list | length == 0

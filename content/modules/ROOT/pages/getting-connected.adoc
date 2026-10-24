@@ -1,0 +1,141 @@
+= Getting Connected
+:navtitle: Getting Connected
+:toc: macro
+:toclevels: 1
+:imagesdir: ../assets/images
+
+Before the workshop modules start, you log in to your Red Hat AI Enterprise
+lab environment, get oriented in the OpenShift console and the OpenShift AI
+dashboard, and verify that the platform is ready.
+
+toc::[]
+
+== Console URL
+
+Your lab environment is a dedicated OpenShift cluster. Open the
+link:{openshift_console_url}[OpenShift web console,window=_blank] — or use
+the *OpenShift Console* tab in the workshop interface.
+
+// NOTE: Live console screenshots are captured in the Act phase.
+image::001-getting-connected-console.png[OpenShift web console login page,link=self,window=blank,width=700]
+
+== Login credentials
+
+Log in to the OpenShift console, the OpenShift AI dashboard, and the
+terminal with the lab credentials provided for your environment:
+
+[source,subs="attributes+"]
+----
+Username: {ssh_user}
+Password: {ssh_password}
+----
+
+These credentials are scoped to your lab environment — do not share them.
+
+== Cluster environment
+
+Your environment runs OpenShift with Red Hat OpenShift AI (RHOAI) 3.5
+installed and configured for this workshop:
+
+* *RHOAI 3.5* — includes EvalHub for evaluations, Model-as-a-Service (MaaS)
+  governance with subscription tiers and API keys, and the observability
+  dashboard.
+* *Your own project* — you work in your assigned project (namespace)
+  throughout the workshop; other attendees cannot see or modify your
+  resources.
+* *GPU worker node* — an NVIDIA L40S (48 GB) GPU worker node is attached to
+  the cluster and schedulable for model serving workloads.
+* *No models pre-deployed* — the environment starts empty; you build the
+  full serving lifecycle from scratch across the six modules.
+
+== Navigating the console
+
+Most workshop steps happen in the *OpenShift AI* dashboard. To reach it from
+the OpenShift console, click the Application Launcher (waffle menu, in the
+masthead) and select *Red Hat OpenShift AI*. You can also use the
+*OpenShift AI* tab in the workshop interface. If prompted, choose
+*Log in with OpenShift* and enter your lab credentials.
+
+The OpenShift console itself has two perspectives, switched from the
+perspective selector in the masthead:
+
+* *Administrator* — use this perspective during the workshop; it exposes the
+  cluster resources, workloads, and logs you inspect in later modules.
+* *Developer* — a simplified view for application developers; it hides many
+  of the resources used in this workshop.
+
+== Console tabs in Showroom
+
+The workshop interface embeds your environment in the right panel with three
+tabs:
+
+[cols="1,3", options="header"]
+|===
+| Tab | What you use it for
+
+| *Terminal*
+| Run the `oc` commands in this workshop against your cluster.
+
+| *OpenShift Console*
+| The OpenShift web console — model serving, workloads, and cluster
+administration tasks.
+
+| *OpenShift AI*
+| The OpenShift AI dashboard — EvalHub, model serving, MaaS configuration,
+and the observability dashboard.
+|===
+
+Use the view switcher at the top of the page to move between full-page
+instructions, a split view, and a full-page environment.
+
+== Verify your environment
+
+Confirm you are connected to the cluster and that OpenShift AI is ready
+before starting Module 1.
+
+. Switch to the *Terminal* tab. If the terminal is not already
+authenticated, log in with your lab credentials.
+. Confirm you are logged in and working in your project:
++
+[source,bash,role="execute"]
+----
+oc whoami
+oc project
+----
+. Verify that the OpenShift AI platform is installed and ready — the
+`DataScienceCluster` resource reports the platform status. Wait until it
+reports `Ready`:
++
+[source,bash,role="execute"]
+----
+oc get dsc
+oc get dsccommon
+----
+
+[NOTE]
+====
+If `DataScienceCluster` is not `Ready` yet, wait a few minutes and re-run
+the commands. Do not start Module 1 until the platform reports ready —
+model serving depends on it.
+====
+
+== Workshop layout
+
+The workshop is strictly sequential — each module's outputs are the next
+module's inputs, and the model you deploy in Module 1 carries forward to the
+end. Budget about two hours end-to-end (including this introduction).
+
+[cols="1,4,1", options="header"]
+|===
+| Module | Title | Duration
+
+| 1 | xref:module-01-deploy-model.adoc[Deploy a Model on Red Hat AI Enterprise] | 10 min
+| 2 | xref:module-02-evaluate-benchmark.adoc[Evaluate and Benchmark Model Performance with EvalHub] | 20 min
+| 3 | xref:module-03-model-as-a-service.adoc[Expose the Model as a Model-as-a-Service] | 20 min
+| 4 | xref:module-04-integrate-application.adoc[Integrate the Model into an Application] | 20 min
+| 5 | xref:module-05-validate-workflow.adoc[Validate the End-to-End Workflow] | 20 min
+| 6 | xref:module-06-monitor-observability.adoc[Monitor Model Performance through Observability] | 20 min
+|===
+
+Continue to xref:module-01-deploy-model.adoc[Module 1: Deploy a Model →] to
+deploy your first model.

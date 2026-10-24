@@ -1,13 +1,718 @@
 ---
-# E2E — End-to-end test
-# Runs all module solve + validate sequences to verify the full lab
-# works from start to finish without manual intervention.
+# ============================================================================
+# E2E — End-to-end lab validation test
+# ============================================================================
+#
+# Purpose:
+#   Replays the automatable student flow from Modules 1-6 on a fresh cluster.
+#   Acts as the automated "solve" — if this passes, the lab works end to end.
+#   Console/UI-only steps (dashboard wizard, Gen AI studio, EvalHub pages,
+#   Dev Spaces interaction, VS Code Chat) are covered by the Act-phase
+#   Playwright tests and are noted below where they are skipped.
+#
+# Idempotent:
+#   Safe to re-run on a cluster where a previous run partially or fully
+#   completed. The project and ServiceAccount are created if missing, the
+#   LLMInferenceService / MaaSModelRef / ConfigMap / Secret / Deployment are
+#   applied (no-op when unchanged), the MaaSModelRef is only created when not
+#   already published, and the API key is minted with a unique name. The
+#   model token and MaaS API key are minted fresh per run with a 1h expiry —
+#   ephemeral, non-destructive.
+#
+# Scope:
+#   - Module 1: Deploy the Nemotron 3 Nano 30B A3B FP8 LLMInferenceService
+#     (KServe/vLLM, 1xGPU) and verify the serving endpoint
+#   - Module 2: SKIPPED — EvalHub evaluation flows are dashboard/CLI console
+#     steps (environment-dependent evalhub CLI and pre-loaded benchmark
+#     datasets); validated via Playwright in the Act phase
+#   - Module 3: Verify MaaS publication (MaaSModelRef, subscription tiers),
+#     the MaaS gateway, and inference through the gateway with an API key
+#   - Module 4: Deploy the maas-chat-client app (ConfigMap + Deployment) and
+#     exercise the request loop via oc exec
+#   - Module 5: Component verification (model server + gateway + app healthy)
+#   - Module 6: User workload monitoring and observability dashboard checks
+#
+# When to run:
+#   - After lab content changes to verify instructions still work
+#   - On a FRESH QA cluster (healthcheck.yml should pass first)
+#   - Via ZT Runner: /stream/qa/e2e
+#   - Or manually: ansible-playbook qa-automation/e2e.yml
+#
+# Prerequisites:
+#   - Fresh cluster with RHOAI 3.5 + MaaS enabled + GPU node
+#     (healthcheck.yml passes first)
+#   - oc logged in with credentials that can manage the student project
+#   - jq installed (used to parse MaaS API responses)
+#   - Model and serving images pre-pulled (RAC risk mitigation — keeps the
+#     Module 1 cold start inside the retry window)
+#
+# Runtime:
+#   ~20-30 minutes first run (vLLM engine init dominates)
+#   ~5 minutes on re-run (most steps are no-ops, only verify tasks run)
+#
+# How manifests are accessed:
+#   Self-contained — no git clone. Students deploy via the dashboard wizard
+#   (Module 1) and Dev Spaces (Module 4), so the equivalent manifests are
+#   inlined here from the module content: the LLMInferenceService (Module 1),
+#   the MaaSModelRef (Module 3), and the client code + Deployment (Module 4).
+#
+# Retry strategy:
+#   Model cold start, MaaS publication, and app rollout are async. Tasks
+#   that depend on them use `until` + `retries` + `delay` to poll for
+#   readiness. Typical: 10-20 retries at 10-30s intervals = 2-10 min max
+#   wait per step.
+#   NOTE: Ansible prints "FAILED - RETRYING" during polling — this is normal
+#   behavior, NOT an error. A real failure shows "fatal:" in the output.
+#
+# Adding modules for your lab:
+#   1. Group tasks by module with a clear section header comment
+#   2. Name every task with the module prefix: "M<N> | <description>"
+#   3. End each module section with a VERIFY task that checks the outcome
+#   4. Use kubernetes.core.k8s with inline definitions (idempotent apply)
+#   5. Use `changed_when: true` for apply/create tasks
+#   6. Use `changed_when: false` for read-only tasks (get, wait, exec, whoami)
+#   7. Add retries for any task that depends on async reconciliation
+#   8. For idempotency: check if a resource exists before creating it
+# ============================================================================
 
-- name: "End-to-End Test"
+- name: End-to-End Test
   hosts: localhost
   connection: local
   gather_facts: false
+  module_defaults:
+    group/kubernetes.core.k8s:
+      kubeconfig: "{{ k8s_kubeconfig | default(omit) }}"
+  environment:
+    KUBECONFIG: "{{ k8s_kubeconfig | default(omit) }}"
+    K8S_AUTH_KUBECONFIG: "{{ k8s_kubeconfig | default(omit) }}"
+  vars:
+    # -- Model (Module 1 — carries forward unchanged through Modules 2-6) ---
+    model_name: nemotron-3-nano-30b-a3b
+    llis_api_version: serving.kserve.io/v1alpha1
+    modelcar_image: oci://registry.redhat.io/rhai/modelcar-nvidia-nemotron-3-nano-30b-a3b-fp8:3.0
+    serving_image: registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.1
+    # The per-student project namespace (Module 1: "named after your lab
+    # user"; the deploy wizard and the LLMInferenceService use it). Some
+    # Module 3 snippets in the content show `llm` — Module 1's namespace is
+    # the source of truth for what this playbook deploys.
+    project_name: lab-user-dev
+    tester_sa: model-tester
+    # -- MaaS (Module 3) -----------------------------------------------------
+    maas_api_version: maas.opendatahub.io/v1alpha1
+    maas_api_namespace: redhat-ods-applications
+    maas_subscription_namespace: models-as-a-service
+    # Subscription tiers pre-provisioned by environment automation (Module 3).
+    # The e2e mints its API key against the free tier: owner group
+    # system:authenticated covers every lab user, including the QA runner.
+    maas_subscriptions:
+      - maas-free-subscription
+      - maas-premium-subscription
+    gateway_name: maas-default-gateway
+    gateway_namespace: openshift-ingress
+    # -- Application (Module 4) ----------------------------------------------
+    app_name: maas-chat-client
+    app_image: registry.access.redhat.com/ubi9/python-311:latest
+    app_secret: maas-credentials
+    app_prompt: "Explain Model-as-a-Service in one sentence."
+    app_interval: "30"
+    # -- Observability (Module 6) --------------------------------------------
+    uwm_namespace: openshift-user-workload-monitoring
+    dashboard_namespace: redhat-ods-applications
+    # -- Sample application source (Module 4) --------------------------------
+    # maas_chat_client.py exactly as printed in the module content, mounted
+    # into the pod via the ConfigMap below (students review the same file in
+    # Dev Spaces).
+    maas_chat_client_py: |
+      #!/usr/bin/env python3
+      """A minimal chat client for the Model-as-a-Service endpoint from Module 3."""
+      import json, os, sys, time
+      import urllib.error
+      import urllib.request
+
+      API_URL = os.environ.get("MAAS_URL", "").rstrip("/")
+      API_KEY = os.environ.get("MAAS_API_KEY", "")
+      MODEL = os.environ.get("MAAS_MODEL", "")
+      PROMPT = os.environ.get("MAAS_PROMPT", "Explain Model-as-a-Service in one sentence.")
+      INTERVAL = int(os.environ.get("MAAS_INTERVAL", "0"))
+      SYSTEM = "You are a concise assistant."
+
+      def chat_completions(model, messages, max_tokens=256):
+          """POST one Chat Completions request and return the parsed response."""
+          payload = json.dumps({"model": model, "messages": messages, "max_tokens": max_tokens}).encode("utf-8")
+          request = urllib.request.Request(
+              f"{API_URL}/v1/chat/completions", data=payload, method="POST",
+              headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"})
+          with urllib.request.urlopen(request, timeout=120) as response:
+              return json.loads(response.read().decode("utf-8"))
+
+      def discover_model():
+          """Return the first ready model ID from the /v1/models catalog."""
+          request = urllib.request.Request(f"{API_URL}/v1/models", headers={"Authorization": f"Bearer {API_KEY}"})
+          with urllib.request.urlopen(request, timeout=30) as response:
+              catalog = json.loads(response.read().decode("utf-8"))
+          ready = [m for m in catalog.get("data", []) if m.get("ready", True)]
+          if not ready:
+              raise RuntimeError("no ready models in the catalog — check Module 3")
+          return ready[0]["id"]
+
+      def print_completion(completion):
+          """Print one completion and its token usage."""
+          choice = completion["choices"][0]
+          usage = completion.get("usage", {})
+          print(f"assistant> {choice['message']['content'].strip()}")
+          print(f"[tokens: {usage.get('prompt_tokens', '?')} in / {usage.get('completion_tokens', '?')} out]")
+
+      def run_interactive(model):
+          """Chat loop: read prompts from the terminal until you type quit."""
+          print("Chat client ready. Type a prompt, or 'quit' to exit.")
+          history = []
+          while True:
+              try:
+                  user_input = input("you> ").strip()
+              except (EOFError, KeyboardInterrupt):
+                  break
+              if not user_input or user_input.lower() in ("quit", "exit"):
+                  break
+              messages = [{"role": "system", "content": SYSTEM}] + history + [{"role": "user", "content": user_input}]
+              try:
+                  completion = chat_completions(model, messages)
+              except urllib.error.HTTPError as exc:
+                  print(f"HTTP {exc.code}: {exc.reason} — check your endpoint URL and API key")
+                  continue
+              except urllib.error.URLError as exc:
+                  print(f"endpoint unreachable: {exc}")
+                  continue
+              print_completion(completion)
+              history += [{"role": "user", "content": user_input},
+                          {"role": "assistant", "content": completion["choices"][0]["message"]["content"]}]
+          print("Bye!")
+
+      def run_request_loop(model):
+          """Deployed mode: send PROMPT every INTERVAL seconds and log results."""
+          print(f"Request loop started — one completion every {INTERVAL}s.")
+          while True:
+              messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": PROMPT}]
+              try:
+                  completion = chat_completions(model, messages)
+                  print_completion(completion)
+              except urllib.error.HTTPError as exc:
+                  print(f"HTTP {exc.code}: {exc.reason} — check your endpoint URL and API key")
+              except urllib.error.URLError as exc:
+                  print(f"endpoint unreachable: {exc}")
+              time.sleep(INTERVAL)
+
+      def main():
+          if not API_URL or not API_KEY:
+              sys.exit("Set MAAS_URL and MAAS_API_KEY before starting the client.")
+          model = MODEL or discover_model()
+          print(f"Using model: {model}")
+          if INTERVAL > 0:
+              run_request_loop(model)
+          else:
+              run_interactive(model)
+
+      if __name__ == "__main__":
+          main()
   tasks:
-    - name: "TODO: Implement end-to-end test sequence"
+
+    # ========================================================================
+    # MODULE 1 — Deploy the model for inference
+    # ========================================================================
+    # Students deploy through the model serving wizard in the dashboard (UI —
+    # covered by Playwright in the Act phase). Here we apply the equivalent
+    # LLMInferenceService exactly as printed in the module content, then poll
+    # for Ready and verify the serving endpoint with the model-tester token.
+
+    - name: "M1 | Create the student project (idempotent)"
+      ansible.builtin.command: oc new-project {{ project_name }}
+      register: result
+      failed_when: result.rc != 0 and 'already exists' not in result.stderr
+      changed_when: "'already exists' not in result.stderr"
+
+    - name: "M1 | Create the model-tester service account (idempotent)"
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: v1
+          kind: ServiceAccount
+          metadata:
+            name: "{{ tester_sa }}"
+            namespace: "{{ project_name }}"
+        state: present
+      changed_when: true
+
+    - name: "M1 | Apply the LLMInferenceService from Module 1"
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: "{{ llis_api_version }}"
+          kind: LLMInferenceService
+          metadata:
+            name: "{{ model_name }}"
+            namespace: "{{ project_name }}"
+            annotations:
+              openshift.io/display-name: NVIDIA Nemotron 3 Nano 30B A3B FP8
+              opendatahub.io/model-type: generative
+              security.opendatahub.io/enable-auth: "true"
+            labels:
+              opendatahub.io/dashboard: "true"
+              opendatahub.io/genai-asset: "true"
+          spec:
+            model:
+              name: "{{ model_name }}"
+              uri: "{{ modelcar_image }}"
+            replicas: 1
+            template:
+              containers:
+                - name: main
+                  image: "{{ serving_image }}"
+                  command:
+                    - python
+                    - -m
+                    - vllm.entrypoints.openai.api_server
+                  args:
+                    - --model=/mnt/models
+                    - --served-model-name={{ model_name }}
+                    - --max-model-len=131072
+                    - --enable-auto-tool-choice
+                    - --tool-call-parser=qwen3_coder
+                    - --trust-remote-code
+                    - --reasoning-parser-plugin=/mnt/models/nano_v3_reasoning_parser.py
+                    - --reasoning-parser=nano_v3
+                  resources:
+                    requests:
+                      cpu: "2"
+                      memory: 16Gi
+                      nvidia.com/gpu: "1"
+                    limits:
+                      cpu: "4"
+                      memory: 24Gi
+                      nvidia.com/gpu: "1"
+              tolerations:
+                - effect: NoSchedule
+                  key: nvidia.com/gpu
+                  operator: Equal
+                  value: l40-gpu
+        state: present
+      changed_when: true
+
+    - name: "M1 | Polling for LLMInferenceService Ready (retries expected, ~10 min)"
+      ansible.builtin.command: >-
+        oc wait --for=condition=Ready llminferenceservice/{{ model_name }}
+        -n {{ project_name }} --timeout=60s
+      register: result
+      until: result.rc == 0
+      retries: 20
+      delay: 30
+
+    - name: "M1 | Get the model serving endpoint URL"
+      ansible.builtin.command: >-
+        oc get llminferenceservice {{ model_name }} -n {{ project_name }}
+        -o jsonpath='{.status.url}'
+      register: model_url
+      changed_when: false
+
+    - name: "M1 | Mint a model-tester token for inference requests"
+      ansible.builtin.command: oc create token {{ tester_sa }} -n {{ project_name }} --duration=1h
+      register: model_token
+      changed_when: false
+      no_log: true
+
+    - name: "M1 | VERIFY — serving endpoint accepts authenticated requests"
+      ansible.builtin.uri:
+        url: "{{ model_url.stdout }}/v1/models"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ model_token.stdout }}"
+        validate_certs: false
+        status_code: 200
+      register: m1_models
+      until: m1_models.status | default(0) == 200
+      retries: 10
+      delay: 10
+      changed_when: false
+      no_log: true
+
+    - name: "M1 | VERIFY — model returns a chat completion"
+      ansible.builtin.uri:
+        url: "{{ model_url.stdout }}/v1/chat/completions"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ model_token.stdout }}"
+          Content-Type: application/json
+        body:
+          model: "{{ model_name }}"
+          messages:
+            - role: user
+              content: "In one sentence, what is Model as a Service?"
+        body_format: json
+        validate_certs: false
+        status_code: 200
+      register: m1_chat
+      until: >-
+        m1_chat.status | default(0) == 200 and
+        m1_chat.json.choices[0].message.content | default('') | length > 0
+      retries: 5
+      delay: 10
+      changed_when: false
+      no_log: true
+
+    # ========================================================================
+    # MODULE 2 — Evaluate and benchmark with EvalHub (SKIPPED)
+    # ========================================================================
+    # Module 2 runs evaluations through the dashboard (Develop & train →
+    # Evaluations) and the evalhub CLI against a pre-loaded benchmark
+    # dataset. Both are console-driven and environment-dependent (EvalHub,
+    # TrustyAI, MLflow must be configured), so this playbook skips the
+    # module — the Act-phase Playwright tests validate the EvalHub flows
+    # against the UI.
+
+    - name: "M2 | SKIPPED — EvalHub flows are validated via Playwright in the Act phase"
       ansible.builtin.debug:
-        msg: "Replace this task with your e2e test implementation"
+        msg: >-
+          Module 2 (EvalHub) is console/UI-driven and environment-dependent
+          (evalhub CLI, benchmark datasets); skipped here and covered by the
+          Act-phase Playwright tests.
+
+    # ========================================================================
+    # MODULE 3 — Expose the model as Model-as-a-Service
+    # ========================================================================
+    # Publishing the model to MaaS creates a MaaSModelRef in the model's
+    # project namespace; subscription tiers are pre-provisioned by
+    # environment automation in the models-as-a-service namespace (Module 3).
+    # Students verify these in the console (UI — Playwright covers the Gen AI
+    # studio views); here we verify the resources and drive inference through
+    # the MaaS gateway with an API key minted via the MaaS API.
+
+    - name: "M3 | Check if MaaSModelRef exists for the model"
+      kubernetes.core.k8s_info:
+        api_version: "{{ maas_api_version }}"
+        kind: MaaSModelRef
+        namespace: "{{ project_name }}"
+      register: mmr_check
+      changed_when: false
+
+    - name: "M3 | Publish the model to MaaS (skipped if already published)"
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: "{{ maas_api_version }}"
+          kind: MaaSModelRef
+          metadata:
+            name: "{{ model_name }}"
+            namespace: "{{ project_name }}"
+          spec:
+            modelRef:
+              kind: LLMInferenceService
+              name: "{{ model_name }}"
+        state: present
+      when: >-
+        mmr_check.resources
+        | selectattr('metadata.name', 'equalto', model_name) | list | length == 0
+      changed_when: true
+
+    - name: "M3 | Polling for MaaSModelRef Ready (retries expected, ~5 min)"
+      kubernetes.core.k8s_info:
+        api_version: "{{ maas_api_version }}"
+        kind: MaaSModelRef
+        name: "{{ model_name }}"
+        namespace: "{{ project_name }}"
+      register: mmr
+      until: >-
+        mmr.resources | length > 0 and
+        mmr.resources[0].status.phase | default('') == 'Ready'
+      retries: 20
+      delay: 15
+
+    - name: "M3 | VERIFY — subscription tiers exist for the model"
+      kubernetes.core.k8s_info:
+        api_version: "{{ maas_api_version }}"
+        kind: MaaSSubscription
+        namespace: "{{ maas_subscription_namespace }}"
+      register: subs
+      failed_when: >-
+        subs.resources | length == 0 or
+        subs.resources | selectattr('metadata.name', 'in', maas_subscriptions) | list | length == 0
+
+    - name: "M3 | VERIFY — MaaS gateway is Programmed"
+      kubernetes.core.k8s_info:
+        api_version: gateway.networking.k8s.io/v1
+        kind: Gateway
+        name: "{{ gateway_name }}"
+        namespace: "{{ gateway_namespace }}"
+      register: gw
+      failed_when: >-
+        gw.resources | length == 0 or
+        not (gw.resources[0].status.conditions | default([])
+        | selectattr('type', 'eq', 'Programmed') | selectattr('status', 'eq', 'True')
+        | list | length > 0)
+
+    - name: "M3 | Discover the cluster apps domain"
+      ansible.builtin.command: oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}'
+      register: cluster_domain
+      changed_when: false
+
+    - name: "M3 | Set the MaaS gateway URL"
+      ansible.builtin.set_fact:
+        maas_url: "https://maas.{{ cluster_domain.stdout | trim }}"
+
+    - name: "M3 | Mint a MaaS API key against the free subscription"
+      ansible.builtin.shell: |
+        curl -sSk -X POST "{{ maas_url }}/maas-api/v1/api-keys" \
+          -H "Authorization: Bearer $(oc whoami -t)" \
+          -H "Content-Type: application/json" \
+          -d '{"name":"e2e-key-'$RANDOM'","expiresIn":"1h","subscription":"maas-free-subscription"}' | jq -r .key
+      register: maas_api_key
+      until:
+        maas_api_key.rc == 0 and
+        maas_api_key.stdout | trim | length > 0 and
+        maas_api_key.stdout | trim != 'null'
+      retries: 5
+      delay: 15
+      changed_when: false
+      no_log: true
+
+    - name: "M3 | VERIFY — MaaS gateway route serves the model catalog"
+      ansible.builtin.shell: |
+        RESPONSE=$(curl -sSk "{{ maas_url }}/v1/models" \
+          -H "Authorization: Bearer {{ maas_api_key.stdout | trim }}")
+        echo "$RESPONSE" | jq -e '[.data[]? | select(.ready==true and (.id | contains("{{ model_name }}")))] | length > 0'
+      register: result
+      until: result.rc == 0
+      retries: 10
+      delay: 15
+      changed_when: false
+      no_log: true
+
+    # ========================================================================
+    # MODULE 4 — Integrate the model into an application
+    # ========================================================================
+    # Students configure and run the maas-chat-client in Dev Spaces (UI —
+    # Playwright covers the editor flows). Here we deploy the on-cluster
+    # version exactly as in the module: the client code from a ConfigMap,
+    # the endpoint URL and API key injected from the maas-credentials Secret,
+    # and the request loop driven by MAAS_PROMPT / MAAS_INTERVAL.
+
+    - name: "M4 | Apply the chat client ConfigMap with the app source"
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: "{{ app_name }}"
+            namespace: "{{ project_name }}"
+          data:
+            maas_chat_client.py: "{{ maas_chat_client_py }}"
+        state: present
+      changed_when: true
+
+    - name: "M4 | Apply the maas-credentials Secret (values from Module 3, no literals)"
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: "{{ app_secret }}"
+            namespace: "{{ project_name }}"
+          type: Opaque
+          stringData:
+            MAAS_URL: "{{ maas_url }}"
+            MAAS_API_KEY: "{{ maas_api_key.stdout | trim }}"
+        state: present
+      no_log: true
+      changed_when: true
+
+    - name: "M4 | Apply the maas-chat-client Deployment"
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: "{{ app_name }}"
+            namespace: "{{ project_name }}"
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: "{{ app_name }}"
+            template:
+              metadata:
+                labels:
+                  app: "{{ app_name }}"
+              spec:
+                containers:
+                  - name: chat-client
+                    image: "{{ app_image }}"
+                    command: ["/bin/bash", "-c", "python3 /opt/client/maas_chat_client.py"]
+                    envFrom:
+                      - secretRef:
+                          name: "{{ app_secret }}"
+                    env:
+                      - name: MAAS_PROMPT
+                        value: "{{ app_prompt }}"
+                      - name: MAAS_INTERVAL
+                        value: "{{ app_interval }}"
+                    volumeMounts:
+                      - name: client-code
+                        mountPath: /opt/client
+                        readOnly: true
+                volumes:
+                  - name: client-code
+                    configMap:
+                      name: "{{ app_name }}"
+        state: present
+      changed_when: true
+
+    - name: "M4 | Polling for maas-chat-client Availability (retries expected, ~2 min)"
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ app_name }}"
+        namespace: "{{ project_name }}"
+      register: app_dep
+      until: >-
+        app_dep.resources | length > 0 and
+        (app_dep.resources[0].status.conditions | default([])
+        | selectattr('type', 'eq', 'Available') | selectattr('status', 'eq', 'True')
+        | list | length > 0)
+      retries: 15
+      delay: 10
+
+    - name: "M4 | VERIFY — one request-loop request via oc exec returns a completion"
+      ansible.builtin.command: >-
+        oc exec deploy/{{ app_name }} -c chat-client -n {{ project_name }} --
+        python3 -c "import sys; sys.path.insert(0, '/opt/client'); import maas_chat_client as c;
+        model = c.MODEL or c.discover_model();
+        comp = c.chat_completions(model, [{'role': 'system', 'content': c.SYSTEM},
+        {'role': 'user', 'content': 'Reply with the single word OK.'}], max_tokens=16);
+        print(comp['choices'][0]['message']['content'])"
+      register: exec_result
+      until: >-
+        exec_result.rc == 0 and
+        exec_result.stdout | trim | length > 0
+      retries: 10
+      delay: 15
+      changed_when: false
+
+    - name: "M4 | Polling for request-loop completions in the app logs (retries expected)"
+      ansible.builtin.command: oc logs deployment/{{ app_name }} -c chat-client -n {{ project_name }}
+      register: app_logs
+      until: "'assistant>' in app_logs.stdout"
+      retries: 10
+      delay: 15
+      changed_when: false
+
+    # ========================================================================
+    # MODULE 5 — Validate the end-to-end workflow
+    # ========================================================================
+    # Students trace the request chain (app → MaaS endpoint → model server)
+    # in the console. The automated equivalent verifies each component of
+    # that chain is healthy: the model server, the MaaS gateway, and the
+    # consuming application. The M3 catalog check and M4 exec request
+    # already proved a completion flows through the full chain.
+
+    - name: "M5 | VERIFY — model server (LLMInferenceService) is Ready"
+      kubernetes.core.k8s_info:
+        api_version: "{{ llis_api_version }}"
+        kind: LLMInferenceService
+        name: "{{ model_name }}"
+        namespace: "{{ project_name }}"
+      register: llis
+      failed_when: >-
+        llis.resources | length == 0 or
+        not (llis.resources[0].status.conditions | default([])
+        | selectattr('type', 'eq', 'Ready') | selectattr('status', 'eq', 'True')
+        | list | length > 0)
+
+    - name: "M5 | VERIFY — MaaS gateway is Programmed"
+      kubernetes.core.k8s_info:
+        api_version: gateway.networking.k8s.io/v1
+        kind: Gateway
+        name: "{{ gateway_name }}"
+        namespace: "{{ gateway_namespace }}"
+      register: gw
+      failed_when: >-
+        gw.resources | length == 0 or
+        not (gw.resources[0].status.conditions | default([])
+        | selectattr('type', 'eq', 'Programmed') | selectattr('status', 'eq', 'True')
+        | list | length > 0)
+
+    - name: "M5 | VERIFY — maas-chat-client deployment is Available"
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: "{{ app_name }}"
+        namespace: "{{ project_name }}"
+      register: app_dep
+      failed_when: >-
+        app_dep.resources | length == 0 or
+        not (app_dep.resources[0].status.conditions | default([])
+        | selectattr('type', 'eq', 'Available') | selectattr('status', 'eq', 'True')
+        | list | length > 0)
+
+    # ========================================================================
+    # MODULE 6 — Monitor model performance through observability
+    # ========================================================================
+    # Students explore the Cluster and Usage dashboards (UI — Playwright
+    # captures those views). The automated equivalent verifies the metric
+    # pipelines behind the dashboard are active: user workload monitoring is
+    # enabled, the observability dashboard flag is on, the UWM Prometheus
+    # pods (the metrics backend) are running, and the model server pods (the
+    # scrape target — vLLM engine metrics appear after a request, which the
+    # M4 request loop guarantees) are up.
+
+    - name: "M6 | User workload monitoring namespace exists"
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Namespace
+        name: "{{ uwm_namespace }}"
+      register: uwm_ns
+      failed_when: uwm_ns.resources | length == 0
+
+    - name: "M6 | DataScienceCluster monitoring component is Managed"
+      kubernetes.core.k8s_info:
+        api_version: datasciencecluster.opendatahub.io/v1
+        kind: DataScienceCluster
+      register: dsc
+      failed_when: >-
+        dsc.resources | length == 0 or
+        dsc.resources[0].spec.components.monitoring.managementState | default('Managed') != 'Managed'
+
+    - name: "M6 | Observability dashboard flag is enabled"
+      ansible.builtin.command: >-
+        oc get odhdashboardconfig odh-dashboard-config -n {{ dashboard_namespace }}
+        -o jsonpath='{.spec.dashboardConfig.observabilityDashboard}'
+      register: obs_flag
+      changed_when: false
+      failed_when: obs_flag.stdout | trim != 'true'
+
+    - name: "M6 | User workload monitoring Prometheus pods are running"
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ uwm_namespace }}"
+      register: uwm_pods
+      failed_when: >-
+        uwm_pods.resources | length == 0 or
+        uwm_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length == 0
+
+    - name: "M6 | Model server pods are running as the metrics scrape target"
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ project_name }}"
+      register: model_pods
+      failed_when: >-
+        model_pods.resources | length == 0 or
+        model_pods.resources
+        | selectattr('metadata.name', 'match', '^' ~ model_name)
+        | selectattr('status.phase', 'equalto', 'Running') | list | length == 0
+
+    # ========================================================================
+    # FINAL — Summary
+    # ========================================================================
+
+    - name: "E2E complete"
+      ansible.builtin.debug:
+        msg: >-
+          Modules 1, 3-6 executed and verified successfully: model serving
+          endpoint, MaaS gateway inference, application request loop, and
+          observability pipelines are all healthy. Module 2 (EvalHub) is
+          validated via Playwright in the Act phase.

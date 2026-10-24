@@ -1,48 +1,421 @@
 = Module 1: Deploy a Model on Red Hat AI Enterprise
 :navtitle: 1. Deploy a Model
+:toc: macro
+:toclevels: 1
+:imagesdir: ../assets/images
 
 == Overview
 
 In this module you deploy a model for inference on Red Hat AI Enterprise.
-You select a model, configure a model server, and verify the deployment is
-accepting inference requests. The model and runtime you configure here carry
-forward through all subsequent modules.
+You select a validated open-source model, configure a model server backed
+by an NVIDIA GPU, and verify the deployment is accepting inference
+requests. The model and runtime you configure here are the foundation for
+the rest of the lab: they carry forward unchanged through every subsequent
+module.
 
 .Duration
-10 minutes
+10 minutes (3 min explore / 5 min deploy / 2 min verify)
 
-== Learning Objectives
+.Prerequisites
+Module 0: Getting Connected — you are logged in to the Red Hat AI
+Enterprise console with your lab credentials and know how to reach the
+OpenShift AI dashboard.
+
+toc::[]
+
+== Learning objectives
 
 * Deploy a model for inference on Red Hat AI Enterprise
 * Verify that the deployed model is running and accepting inference requests
 
-== 1.1 — Explore the Lab Environment
+Along the way you also review the available model server runtimes, select a
+model from the model catalog, configure model server parameters — runtime,
+replicas, and resource limits — and confirm the model responds to a test
+inference request.
 
-TODO: Describe the lab environment — OpenShift AI console access, project/namespace layout, pre-loaded resources.
+== 1.1 — Explore the lab environment
 
-== 1.2 — Deploy the Model for Inference
+Your lab environment is a Red Hat AI Enterprise cluster: OpenShift plus
+OpenShift AI, with an NVIDIA L40S 48 GB GPU worker node reserved for your
+model server. No models are pre-deployed — you build the full serving
+lifecycle from scratch.
 
-. Log in to the Red Hat AI Enterprise console.
-. Navigate to the model serving area within OpenShift AI.
-. Review the available model server runtimes.
-. Select the model to deploy.
-. Configure the model server parameters: runtime, replicas, and resource limits.
-. Deploy the model to the platform.
-. Monitor the deployment status and wait for the model pod to become `Running`.
+. Open the OpenShift web console at link:{openshift_console_url}[{openshift_console_url}]
+and log in with your lab credentials.
+. Open the application navigation menu in the web console and select
+*Red Hat OpenShift AI*. The OpenShift AI dashboard opens.
+. Explore the dashboard. The left navigation pane gives you access to
+*Projects*, *Deployments*, and the *Gen AI Studio* section (AI asset
+endpoints and API keys) that later modules use.
 
-== 1.3 — Verify the Deployment
+image::101-rhoai-dashboard.png[OpenShift AI dashboard home page with the left navigation pane,link=self,window=blank,width=700]
 
-. Locate the model's inference endpoint in the console.
-. Send a test inference request to confirm the model is responding.
+// NOTE: screenshot placeholder — capture the OpenShift AI dashboard home page during the Act phase.
 
-[source,bash]
+Check that the platform is healthy before deploying anything. Confirm the
+DataScienceCluster custom resource exists — it represents the OpenShift AI
+components installed on the cluster:
+
+[source,role="execute"]
 ----
-# TODO: add curl/inference command
+oc get dsc
 ----
 
-. Confirm the response matches the expected output format.
+----
+NAME          AGE
+default-dsc   26d
+----
 
-== Key Takeaways
+Next, confirm your GPU node is Ready and schedulable. List the cluster
+nodes, then filter for nodes that advertise NVIDIA GPUs:
+
+[source,role="execute"]
+----
+oc get nodes -o wide
+oc get nodes -L nvidia.com/gpu.product
+----
+
+----
+NAME             STATUS   ROLES           AGE   VERSION   INTERNAL-IP    OS-IMAGE   KERNEL-VERSION          CONTAINER-RUNTIME
+control-plane-0  Ready    control-plane   26d   v1.33.4   10.0.0.10      RHCOS      5.14.0-570.14.1.el9_6   cri-o://1.33.4
+control-plane-1  Ready    control-plane   26d   v1.33.4   10.0.0.11      RHCOS      5.14.0-570.14.1.el9_6   cri-o://1.33.4
+control-plane-2  Ready    control-plane   26d   v1.33.4   10.0.0.12      RHCOS      5.14.0-570.14.1.el9_6   cri-o://1.33.4
+worker-0         Ready    worker          26d   v1.33.4   10.0.0.21      RHCOS      5.14.0-570.14.1.el9_6   cri-o://1.33.4
+worker-1         Ready    worker          26d   v1.33.4   10.0.0.22      RHCOS      5.14.0-570.14.1.el9_6   cri-o://1.33.4
+gpu-worker-0     Ready    worker          26d   v1.33.4   10.0.0.31      RHCOS      5.14.0-570.14.1.el9_6   cri-o://1.33.4
+
+NAME             STATUS   ROLES    AGE   VERSION   NVIDIA.COM/GPU.PRODUCT
+control-plane-0  Ready    control-plane   26d   v1.33.4
+control-plane-1  Ready    control-plane   26d   v1.33.4
+control-plane-2  Ready    control-plane   26d   v1.33.4
+worker-0         Ready    worker          26d   v1.33.4
+worker-1         Ready    worker          26d   v1.33.4
+gpu-worker-0     Ready    worker          26d   v1.33.4   NVIDIA-L40S
+----
+
+The `nvidia.com/gpu.product` label confirms `gpu-worker-0` is the NVIDIA
+L40S 48 GB GPU node. Your model server in this module requests one GPU, so
+it schedules on this node.
+
+=== Project and namespace layout
+
+The model you deploy in this module runs in your own project, named after
+your lab user — for example, `lab-user-dev`. Everything you create in the
+next sections lives in that project:
+
+* The model server deployment and its `LLMInferenceService` resource
+* The pod that runs the vLLM serving image on the GPU node
+* The token secret generated for inference requests
+
+Platform-level components — the serving runtime templates, operators, and
+the DataScienceCluster configuration — are managed by the cluster
+administrator and run outside your project.
+
+image::101-project-layout.png[Projects page showing your project,link=self,window=blank,width=700]
+
+// NOTE: screenshot placeholder — capture the Projects page showing the student project during the Act phase.
+
+== 1.2 — Deploy the model for inference
+
+=== Select the model
+
+Red Hat AI ships models at two support levels: *validated* and *enabled*.
+Red Hat tests validated models with GuideLLM performance benchmarking and
+Language Model Evaluation Harness accuracy evaluations across specific
+OpenShift Container Platform, Red Hat OpenShift AI, and Red Hat AI
+Inference version combinations, and ships them with quantized variants in
+formats such as FP8 and BF16.
+
+For this lab you use *NVIDIA Nemotron 3 Nano 30B A3B FP8*, a validated,
+instruction-tuned large language model designed for enterprise deployment.
+The FP8 quantization keeps the memory footprint low: the validated model
+support matrix lists a minimum of roughly 37.6 GB of VRAM, so the model
+fits on a single 48 GB NVIDIA L40S GPU node. It delivers production-grade
+inference performance for coding assistance, reasoning tasks, and
+tool-calling workflows, which makes it ideal for Model-as-a-Service
+architectures where multiple teams share centrally-managed model
+infrastructure.
+
+You can discover and select verified generative AI models in the OpenShift
+AI *model catalog* — a curated, user-facing directory for finding models
+appropriate for your business use case.
+
+=== Deploy through the model serving wizard
+
+To use the vLLM NVIDIA GPU ServingRuntime for KServe, GPU support must be
+enabled on the cluster and the Node Feature Discovery Operator must be
+installed and configured. Both are already set up in the lab environment.
+
+. In the OpenShift AI dashboard left menu, click *Projects*.
+. Click the name of your project. The project details page opens.
+. Click the *Deployments* tab.
+. Click *Deploy model*. The Deploy a model wizard opens.
+. In the *Model details* section, provide information about the model:
+.. From the *Model location* list, select the connection type that points
+to the Nemotron 3 Nano 30B A3B FP8 modelcar (an OCI-compliant registry
+image) and complete the connection detail fields.
+.. From the *Model type* list, select *Generative AI model*.
+.. Click *Next*.
+. In the *Model deployment* section, configure the deployment:
+.. In the *Model deployment name* field, enter `nemotron-3-nano-30b-a3b`.
+.. In the *Description* field, enter a short description of the deployment.
+.. From the *Hardware profile* list, select the profile that exposes one
+NVIDIA GPU. Selecting an NVIDIA GPU accelerator filters for compatible
+runtimes such as the vLLM NVIDIA GPU ServingRuntime for KServe.
+.. Optional: click *Customize resource requests and limits* and set the
+values listed in the configuration table below.
+.. In the *Serving runtime* field, select *vLLM NVIDIA GPU ServingRuntime
+for KServe*. If the system can identify a single distinct runtime for the
+selected accelerator, the auto-select option picks it for you.
+.. In the *Number of model server replicas to deploy* field, enter `1`.
+.. Click *Next*.
+. In the *Advanced settings* section:
+.. Optional: select *Add as AI asset endpoint* to publish the model's
+endpoint on the *Gen AI studio → AI asset endpoints* page, and enter `chat`
+in the *Use case* field.
+.. Optional: select *Model access* to make the model available through an
+external route.
+.. Select *Require token authentication* and enter a service account name,
+for example `model-tester`. You use the generated token in section 1.3.
+.. In the *Deployment strategy* section, select *Rolling update*.
+. Click *Deploy*.
+
+Verification: the deployed model appears on the *Deployments* tab of your
+project and on the *Deployments* page of the dashboard with a checkmark in
+the *Status* column.
+
+Watch the model server pod come up:
+
+[source,role="execute"]
+----
+oc project lab-user-dev
+oc get pods -w
+----
+
+----
+NAME                                                    READY   STATUS    RESTARTS   AGE
+nemotron-3-nano-30b-a3b-predictor-7d9f8b6c5-k2p9q       1/1     Running   0          4m
+----
+
+The pod transitions from `Pending` to `Running` once the model server is
+up. On a first deployment the server also initializes the vLLM engine, so
+give it a few minutes. The lab environment pre-pulls the model and serving
+images, which keeps startup time short.
+
+image::101-deployment-status.png[Deployments tab with the model showing a Ready status checkmark,link=self,window=blank,width=700]
+
+// NOTE: screenshot placeholder — capture the Deployments tab with the Ready checkmark during the Act phase.
+
+=== What the wizard creates
+
+Behind the scenes, the wizard creates an `LLMInferenceService` resource on
+the single-model serving platform (KServe). The resource shown here is the
+configuration used in this lab, simplified for readability:
+
+[source,yaml]
+----
+apiVersion: serving.kserve.io/v1alpha1
+kind: LLMInferenceService
+metadata:
+  name: nemotron-3-nano-30b-a3b
+  namespace: lab-user-dev
+  annotations:
+    openshift.io/display-name: NVIDIA Nemotron 3 Nano 30B A3B FP8
+    opendatahub.io/model-type: generative
+    security.opendatahub.io/enable-auth: "true"
+  labels:
+    opendatahub.io/dashboard: "true"
+    opendatahub.io/genai-asset: "true"
+spec:
+  model:
+    name: nemotron-3-nano-30b-a3b
+    uri: oci://registry.redhat.io/rhai/modelcar-nvidia-nemotron-3-nano-30b-a3b-fp8:3.0
+  replicas: 1
+  template:
+    containers:
+      - name: main
+        image: registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.1
+        command:
+          - python
+          - -m
+          - vllm.entrypoints.openai.api_server
+        args:
+          - --model=/mnt/models
+          - --served-model-name=nemotron-3-nano-30b-a3b
+          - --max-model-len=131072
+          - --enable-auto-tool-choice
+          - --tool-call-parser=qwen3_coder
+          - --trust-remote-code
+          - --reasoning-parser-plugin=/mnt/models/nano_v3_reasoning_parser.py
+          - --reasoning-parser=nano_v3
+        resources:
+          requests:
+            cpu: "2"
+            memory: 16Gi
+            nvidia.com/gpu: "1"
+          limits:
+            cpu: "4"
+            memory: 24Gi
+            nvidia.com/gpu: "1"
+    tolerations:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Equal
+        value: l40-gpu
+----
+
+[[resource-config]]
+.Model server configuration explained
+[cols="1,2", options="header"]
+|===
+| Field | Purpose
+
+| `spec.model.uri`
+| Points to the validated Nemotron 3 Nano 30B A3B FP8 modelcar. The model
+ships as a container image, so the serving engine loads it directly from
+the image filesystem instead of downloading from remote object storage.
+
+| `spec.replicas`
+| One model server replica, holding one GPU. Scaling replicas out for
+shared consumption is covered in Module 3.
+
+| `spec.template.containers.image`
+| The serving image, `rhaii/vllm-cuda-rhel9:3.5.1`, which runs the
+OpenAI-compatible vLLM engine on NVIDIA GPUs.
+
+| `resources`
+| Requests of 2 CPU / 16 Gi memory / 1 GPU and limits of 4 CPU / 24 Gi
+memory / 1 GPU, sized for the Nemotron model on a single L40S GPU node.
+
+| custom runtime arguments (`args`)
+| `--max-model-len=131072` sets a 131,072-token context window;
+`--enable-auto-tool-choice` with `--tool-call-parser=qwen3_coder` enables
+tool-calling; `--trust-remote-code` allows the model's custom code;
+`--reasoning-parser-plugin` and `--reasoning-parser=nano_v3` enable the
+Nemotron reasoning output parser shipped inside the modelcar.
+
+| `tolerations`
+| Lets the pod schedule on the GPU node, which is tainted
+`nvidia.com/gpu=l40-gpu:NoSchedule`.
+|===
+
+[IMPORTANT]
+====
+The model name, serving runtime, and resource configuration you set in this
+module carry forward unchanged through all subsequent modules (Modules 2-6).
+Do not scale down, redeploy, or rename the model between modules.
+====
+
+== 1.3 — Verify the deployment
+
+=== Check the pod and model status
+
+Confirm the model server pod is `Running` and the `LLMInferenceService`
+reports ready:
+
+[source,role="execute"]
+----
+oc get pods
+----
+
+----
+NAME                                               READY   STATUS    RESTARTS   AGE
+nemotron-3-nano-30b-a3b-predictor-7d9f8b6c5-k2p9q  1/1     Running   0          4m
+----
+
+[source,role="execute"]
+----
+oc get llminferenceservice nemotron-3-nano-30b-a3b
+----
+
+----
+NAME                       URL                                                              READY   AGE
+nemotron-3-nano-30b-a3b    https://nemotron-3-nano-30b-a3b-lab-user-dev.apps.cluster.example.com   True    5m
+----
+
+When the `READY` column shows `True`, the model server pod is Running and
+the model is ready to accept inference requests.
+
+=== Locate the inference endpoint and token
+
+. From the OpenShift AI dashboard, click *AI hub → Deployments*. The
+inference endpoint for the model is shown in the *Inference endpoints*
+field. Copy the endpoint URL.
+. To see the endpoints from the project details page instead, go to your
+project's *Deployments* tab and click *Internal and external endpoint*.
+. If you enabled token authentication, expand the section for your model on
+the *Deployments* tab. Your authentication token is shown in the *Token
+authentication* section, in the *Token secret* field. Click *Copy* and save
+it.
+
+image::101-inference-endpoint.png[Expanded deployment showing the inference endpoint and token secret,link=self,window=blank,width=700]
+
+// NOTE: screenshot placeholder — capture the expanded deployment showing the inference endpoint and token secret during the Act phase.
+
+=== Send a test inference request
+
+The vLLM runtime is compatible with the OpenAI REST API, so the model
+serves the `/v1/chat/completions` path. The model serving platform serves
+external API requests over the HTTPS port of the OpenShift router (usually
+port 443).
+
+Store the endpoint and token as shell variables, then send a chat request:
+
+[source,bash,role="execute"]
+----
+MODEL_URL=https://nemotron-3-nano-30b-a3b-lab-user-dev.apps.cluster.example.com
+TOKEN=paste-your-token-secret-here
+
+curl -s $MODEL_URL/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "model": "nemotron-3-nano-30b-a3b",
+    "messages": [
+      {
+        "role": "user",
+        "content": "In one sentence, what is Model as a Service?"
+      }
+    ]
+  }'
+----
+
+A successful response returns the assistant's answer in the
+OpenAI-compatible chat completion format:
+
+----
+{
+  "id": "chatcmpl-4f9c8b3e",
+  "object": "chat.completion",
+  "created": 1761321600,
+  "model": "nemotron-3-nano-30b-a3b",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Model as a Service (MaaS) is a deployment model that provides access to pre-trained AI models through APIs, so you can consume model capabilities without managing the underlying infrastructure."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 21,
+    "completion_tokens": 38,
+    "total_tokens": 59
+  }
+}
+----
+
+. Confirm the response contains a `choices` array with the assistant's
+message in `choices[0].message.content`.
+. Keep the endpoint URL and token saved — you will reuse them when you
+expose the model as a Model-as-a-Service in Module 3.
+
+Your model is now deployed, running, and accepting inference requests — the
+foundation for every module that follows.
+
+== Key takeaways
 
 * Red Hat AI Enterprise provides a streamlined workflow for deploying models to inference endpoints.
 * A deployed model must be verified before it can be evaluated or exposed to consumers.
@@ -50,4 +423,5 @@ TODO: Describe the lab environment — OpenShift AI console access, project/name
 
 '''
 
-xref:module-02-evaluate-benchmark.adoc[Next: Evaluate and Benchmark Model Performance →]
+xref:getting-connected.adoc[← Previous]
+xref:module-02-evaluate-benchmark.adoc[Next: Evaluate with EvalHub →]

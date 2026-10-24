@@ -38,4 +38,5 @@ OpenShift/Kubernetes knowledge and familiarity with AI model concepts.
 Your lab environment is a Red Hat AI Enterprise cluster. No models are
 pre-deployed — you build up the full serving lifecycle from scratch.
 
-TODO: Add access instructions — console URL, credentials, namespace.
+xref:getting-connected.adoc[Start: Getting Connected →] to log in and
+verify your environment before starting Module 1.

@@ -1,0 +1,59 @@
+= Conclusion
+:navtitle: Conclusion
+
+Congratulations — you took a model through the full serving lifecycle on
+Red Hat AI Enterprise, from an empty cluster to a shared, governed, and
+monitored Model-as-a-Service endpoint.
+
+== What you accomplished
+
+* *Module 1 — Deploy a Model*: Deployed the open-source model for inference
+  via KServe/vLLM on the GPU node, configured the model server runtime,
+  replicas, and resource limits, and verified the deployment was accepting
+  inference requests.
+* *Module 2 — Evaluate with EvalHub*: Ran a benchmark evaluation against the
+  deployed model, analyzed latency, throughput, and quality results, and
+  saved the evaluation as a repeatable workflow for tracking performance
+  over time.
+* *Module 3 — Model-as-a-Service*: Exposed the model as a shared MaaS
+  endpoint with subscription-based access control, an API key with token
+  rate limits, and scaling policies for concurrent consumers.
+* *Module 4 — Integrate into an Application*: Configured and deployed the
+  sample application against the MaaS endpoint using standard
+  OpenAI-compatible API patterns.
+* *Module 5 — Validate End-to-End*: Traced a request through the serving
+  chain (application → MaaS endpoint → model server → model), verified the
+  response at each layer, and recovered from a simulated failure.
+* *Module 6 — Monitor Performance*: Generated load through the application
+  and observed request rate, latency (p50/p95/p99), throughput, error rate,
+  and resource utilization on the observability dashboard.
+
+== Where to go next
+
+* link:https://docs.redhat.com/en/documentation/red_hat_ai_enterprise/[Red Hat AI Enterprise documentation] — the full product documentation set
+* link:https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/[Red Hat OpenShift AI 3.5 documentation] — serving, governance, and observability guidance
+* link:https://www.redhat.com/en/products/ai/validated-models[Validated models by Red Hat AI] — third-party models validated for serving on the Red Hat AI platform
+* link:https://huggingface.co/RedHatAI[RedHatAI on Hugging Face] — model details, weights, and deploy commands for validated models
+
+== Clean up
+
+If you are done with the lab, release the resources your environment holds —
+especially GPU capacity and MaaS quota:
+
+* Delete the API key you created in Module 3 so the subscription no longer
+  grants access to the endpoint.
+* Delete the MaaS subscription and the model deployment from your project.
+* Delete the application deployed in Module 4.
+
+Your instructor confirms how the lab environment itself is reclaimed after
+the session.
+
+== Feedback
+
+Your feedback shapes future versions of this workshop. Share it through the
+feedback channel provided by your instructor, or talk to the Red Hat team
+running the session — the exit survey takes only a minute.
+
+Missed something? Go back to
+xref:module-06-monitor-observability.adoc[Module 6: Monitor Performance] or
+any earlier module from the left navigation.
