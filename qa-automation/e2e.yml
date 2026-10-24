@@ -39,7 +39,7 @@
 #   - Or manually: ansible-playbook qa-automation/e2e.yml
 #
 # Prerequisites:
-#   - Fresh cluster with RHOAI 3.5 + MaaS enabled + GPU node
+#   - Fresh cluster with RHOAI 3.6-ea2 + MaaS enabled + GPU node
 #     (healthcheck.yml passes first)
 #   - oc logged in with credentials that can manage the student project
 #   - jq installed (used to parse MaaS API responses)
@@ -88,9 +88,9 @@
   vars:
     # -- Model (Module 1 — carries forward unchanged through Modules 2-6) ---
     model_name: nemotron-3-nano-30b-a3b
-    llis_api_version: serving.kserve.io/v1alpha1
+    llis_api_version: serving.kserve.io/v1alpha2
     modelcar_image: oci://registry.redhat.io/rhai/modelcar-nvidia-nemotron-3-nano-30b-a3b-fp8:3.0
-    serving_image: registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.1
+    serving_image: registry.redhat.io/rhaiis/vllm-cuda-rhel9:3.3.1
     # The per-student project namespace (Module 1: "named after your lab
     # user"; the deploy wizard and the LLMInferenceService use it). Some
     # Module 3 snippets in the content show `llm` — Module 1's namespace is
@@ -105,8 +105,7 @@
     # The e2e mints its API key against the free tier: owner group
     # system:authenticated covers every lab user, including the QA runner.
     maas_subscriptions:
-      - maas-free-subscription
-      - maas-premium-subscription
+      - "{{ model_name }}"
     gateway_name: maas-default-gateway
     gateway_namespace: openshift-ingress
     # -- Application (Module 4) ----------------------------------------------
@@ -260,23 +259,25 @@
               name: "{{ model_name }}"
               uri: "{{ modelcar_image }}"
             replicas: 1
+            router:
+              gateway:
+                refs:
+                  - name: openshift-ai-inference
+                    namespace: openshift-ingress
+              route: {}
             template:
               containers:
                 - name: main
                   image: "{{ serving_image }}"
-                  command:
-                    - python
-                    - -m
-                    - vllm.entrypoints.openai.api_server
-                  args:
-                    - --model=/mnt/models
-                    - --served-model-name={{ model_name }}
-                    - --max-model-len=131072
-                    - --enable-auto-tool-choice
-                    - --tool-call-parser=qwen3_coder
-                    - --trust-remote-code
-                    - --reasoning-parser-plugin=/mnt/models/nano_v3_reasoning_parser.py
-                    - --reasoning-parser=nano_v3
+                  env:
+                    - name: VLLM_ADDITIONAL_ARGS
+                      value: >-
+                        --max-model-len=131072
+                        --enable-auto-tool-choice
+                        --tool-call-parser=qwen3_coder
+                        --trust-remote-code
+                        --reasoning-parser-plugin=/mnt/models/nano_v3_reasoning_parser.py
+                        --reasoning-parser=nano_v3
                   resources:
                     requests:
                       cpu: "2"
@@ -390,6 +391,36 @@
       register: mmr_check
       changed_when: false
 
+    - name: "M3 | Re-attach the model to the MaaS gateway (governance pairing needs the model route on maas-default-gateway)"
+      command:
+        argv:
+          - oc
+          - patch
+          - llminferenceservice
+          - "{{ model_name }}"
+          - -n
+          - "{{ project_name }}"
+          - --type=merge
+          - -p
+          - '{"spec":{"router":{"gateway":{"refs":[{"name":"maas-default-gateway","namespace":"openshift-ingress"}]}}}}'
+      changed_when: true
+
+    - name: "M3 | Wait for the gateway re-attach to settle (route re-rolls)"
+      command:
+        argv:
+          - oc
+          - wait
+          - --for=condition=Ready
+          - llminferenceservice/{{ model_name }}
+          - -n
+          - "{{ project_name }}"
+          - --timeout=60s
+      register: llis_gateway_wait
+      until: llis_gateway_wait.rc == 0
+      retries: 10
+      delay: 15
+      changed_when: true
+
     - name: "M3 | Publish the model to MaaS (skipped if already published)"
       kubernetes.core.k8s:
         definition:
@@ -420,6 +451,44 @@
         mmr.resources[0].status.phase | default('') == 'Ready'
       retries: 20
       delay: 15
+
+    - name: "M3 | Create the MaaSSubscription pairing the model with governance (idempotent)"
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: "{{ maas_api_version }}"
+          kind: MaaSSubscription
+          metadata:
+            name: "{{ model_name }}"
+            namespace: "{{ maas_subscription_namespace }}"
+          spec:
+            modelRefs:
+              - name: "{{ model_name }}"
+                namespace: "{{ project_name }}"
+                tokenRateLimits:
+                  - limit: 50000
+                    window: 1m
+            owner:
+              groups:
+                - name: system:authenticated
+            priority: 0
+      changed_when: true
+
+    - name: "M3 | Create the MaaSAuthPolicy for the model (required alongside the subscription)"
+      kubernetes.core.k8s:
+        definition:
+          apiVersion: "{{ maas_api_version }}"
+          kind: MaaSAuthPolicy
+          metadata:
+            name: "{{ model_name }}-policy"
+            namespace: "{{ maas_subscription_namespace }}"
+          spec:
+            modelRefs:
+              - name: "{{ model_name }}"
+                namespace: "{{ project_name }}"
+            subjects:
+              groups:
+                - name: system:authenticated
+      changed_when: true
 
     - name: "M3 | VERIFY — subscription tiers exist for the model"
       kubernetes.core.k8s_info:
@@ -453,12 +522,12 @@
       ansible.builtin.set_fact:
         maas_url: "https://maas.{{ cluster_domain.stdout | trim }}"
 
-    - name: "M3 | Mint a MaaS API key against the free subscription"
+    - name: "M3 | Mint a MaaS API key against the model subscription"
       ansible.builtin.shell: |
         curl -sSk -X POST "{{ maas_url }}/maas-api/v1/api-keys" \
           -H "Authorization: Bearer $(oc whoami -t)" \
           -H "Content-Type: application/json" \
-          -d '{"name":"e2e-key-'$RANDOM'","expiresIn":"1h","subscription":"maas-free-subscription"}' | jq -r .key
+          -d '{"name":"e2e-key-'$RANDOM'","expiresIn":"1h","subscription":"{{ model_name }}"}' | jq -r .key
       register: maas_api_key
       until:
         maas_api_key.rc == 0 and

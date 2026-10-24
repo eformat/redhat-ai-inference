@@ -79,7 +79,11 @@
       failed_when: >-
         nodes.resources | length == 0 or
         nodes.resources
-        | map(attribute='status.capacity.nvidia.com/gpu', default='0')
+        | map(attribute='status.capacity')
+        | map('dict2items')
+        | flatten
+        | selectattr('key', 'equalto', 'nvidia.com/gpu')
+        | map(attribute='value')
         | map('int') | select('gt', 0) | list | length == 0
 
     # -- Check 4: RHOAI dashboard route --------------------------------------

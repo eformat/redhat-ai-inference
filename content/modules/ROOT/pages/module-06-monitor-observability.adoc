@@ -12,7 +12,7 @@ evaluation. This module introduces the observability dashboard in Red Hat AI
 Enterprise and closes the loop with the scaling configuration you set in
 Module 3.
 
-You explore the Cluster and Usage dashboards, review the model serving
+You explore the Dashboard and Infrastructure tabs, review the model serving
 metrics that reflect the traffic your application has been sending since
 Module 4, generate load against the MaaS endpoint and watch the metrics
 respond, and analyze how request rate, latency, and resource utilization
@@ -57,9 +57,8 @@ image::601-dashboards-nav.png[OpenShift AI left navigation with Observe & monito
 
 // Live capture in Act phase: screenshot of the OpenShift AI left navigation with Observe & monitor → Dashboard selected, TTFT and latency chips visible.
 
-The default view is the *Cluster* dashboard. This shows low-level
-infrastructure details about the OpenShift AI cluster, highlighting basic GPU
-usage up front:
+The default view is the *Dashboard* tab. This shows the health, performance,
+and resource usage of AI workloads, highlighting basic GPU usage up front:
 
 * *Platform health* — overall serving platform status; the reference capture
 shows 100% health
@@ -70,9 +69,9 @@ time window (the reference capture covers the last 30 minutes)
 * *Latency chips* — time to first token (TTFT) and response latency at a
 glance
 
-image::602-cluster-dashboard.png[Cluster dashboard showing platform health, deployed models, resource charts, and latency chips,link=self,window=blank,width=700]
+image::602-cluster-dashboard.png[Dashboard tab showing platform health, deployed models, resource charts, and latency chips,link=self,window=blank,width=700]
 
-// Live capture in Act phase: annotated Cluster dashboard screenshot with callouts on health, model count, resource charts, and the GPU utilization spike.
+// Live capture in Act phase: annotated Dashboard tab screenshot with callouts on health, model count, resource charts, and the GPU utilization spike.
 
 The dashboard also surfaces the model serving metrics you review throughout
 this module:
@@ -83,22 +82,30 @@ this module:
 * Error rate — failed and rate-limited requests
 * Resource utilization (CPU, memory, GPU)
 
-Select the *Usage* tab to view MaaS usage analytics — the subscription-level
-token accounting this module focuses on in section 6.2. (The dashboard also
-supports a Models tab in full deployments; your lab user has permissions to
-see the Cluster and Usage tabs only.)
+MaaS usage analytics — the subscription-level token accounting this module
+focuses on in section 6.2 — live on this same *Dashboard* tab, the default
+observability view in RHOAI 3.6; the second tab, *Infrastructure*, shows node
+and infrastructure metrics. (The dashboard also supports a Models tab in full
+deployments; your lab user has permissions to see the Dashboard and
+Infrastructure tabs only.)
 
-image::603-usage-dashboard.png[Usage dashboard showing the overview metric cards and token consumption table,link=self,window=blank,width=700]
+[NOTE]
+====
+RHOAI 3.6 renamed and reorganized the observability tabs: the former
+*Cluster* and *Usage* tabs are now *Dashboard* and *Infrastructure*.
+====
 
-// Live capture in Act phase: annotated Usage dashboard screenshot with callouts on the overview metric cards and the Token Consumption by User table.
+image::603-usage-dashboard.png[Dashboard tab showing the overview metric cards and token consumption table,link=self,window=blank,width=700]
+
+// Live capture in Act phase: annotated Dashboard tab screenshot with callouts on the overview metric cards and the Token Consumption by User table.
 
 [IMPORTANT]
 ====
-The Usage dashboard shows aggregated data from all users on the shared
-workshop cluster — you will see other participants' usage too, assuming they
-have completed earlier modules. This demonstrates multi-tenant observability:
-in production you would scope visibility with role-based access control to
-team or project boundaries.
+The usage analytics on the Dashboard tab show aggregated data from all users
+on the shared workshop cluster — you will see other participants' usage too,
+assuming they have completed earlier modules. This demonstrates multi-tenant
+observability: in production you would scope visibility with role-based
+access control to team or project boundaries.
 ====
 
 [TIP]
@@ -112,7 +119,7 @@ interval.
 
 == 6.2 — Monitor key model serving metrics
 
-The Usage dashboard reports five overview metrics for the selected time
+The Dashboard tab reports five overview metrics for the selected time
 period, plus a per-user token consumption table. The reference capture (a
 6-hour window) shows 844K total tokens, 57 requests, 3 rate-limited, a 95%
 success rate, and 2 active users.
@@ -348,7 +355,7 @@ Module 3. If the load you just generated were normal production traffic,
 would the current policy scale fast enough to keep latency within your
 baseline? Serving metrics are the evidence for that decision.
 
-Filter the Usage dashboard to sharpen the analysis:
+Filter the usage analytics on the Dashboard tab to sharpen the analysis:
 
 * *User* — search for your username (for example, `llmuser-hv6w7` in the
 reference capture) to isolate your own usage across Modules 3–6
@@ -359,9 +366,9 @@ less interesting for now
 * *Time period* — widen the window from the last 5 minutes to up to the last
 14 days, or pick a custom range, to see trends over time
 
-image::606-usage-filtered.png[Usage dashboard filtered by user and subscription showing per-user token consumption,link=self,window=blank,width=700]
+image::606-usage-filtered.png[Dashboard tab filtered by user and subscription showing per-user token consumption,link=self,window=blank,width=700]
 
-// Live capture in Act phase: annotated screenshot of the Usage dashboard filtered by user and subscription, showing per-user token consumption for the workshop session.
+// Live capture in Act phase: annotated screenshot of the Dashboard tab filtered by user and subscription, showing per-user token consumption for the workshop session.
 
 Record at least one trend or threshold observation from this load run — for
 example, the request rate where TTFT started climbing, or the GPU

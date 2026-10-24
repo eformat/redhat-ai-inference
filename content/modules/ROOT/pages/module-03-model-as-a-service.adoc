@@ -109,10 +109,30 @@ the Act phase.
 
 The model you deployed in Module 1 — `nemotron-3-nano-30b-a3b`, serving on the
 NVIDIA L40S GPU node in your project — was deployed as an
-`LLMInferenceService` attached to the MaaS gateway (`maas-default-gateway`).
-Models published for MaaS use the `LLMInferenceService` architecture, which
-integrates with the MaaS gateway for subscription-based quota enforcement. That
-gateway wiring — not a per-team route — is what makes the deployment shared.
+`LLMInferenceService` attached to the direct-serving gateway
+(`openshift-ai-inference`) for single-team access. Models published for MaaS
+use the `LLMInferenceService` architecture, which integrates with the MaaS
+gateway for subscription-based quota enforcement. Publishing the model
+re-attaches the router to the shared MaaS gateway (`maas-default-gateway`) —
+that gateway wiring, not a per-team route, is what makes the deployment
+shared.
+
+Publishing changes the router gateway section of the `LLMInferenceService`
+from the direct-serving gateway to the MaaS gateway:
+
+[source,yaml]
+----
+router:
+  gateway:
+    refs:
+      - name: maas-default-gateway
+        namespace: openshift-ingress
+    route: {}
+----
+
+With the router attached to the shared gateway, the model is served through
+the MaaS gateway at
+`https://maas.apps.<cluster-domain>/{project-namespace}/nemotron-3-nano-30b-a3b`.
 
 Review the serving configuration for the deployed model:
 
@@ -120,8 +140,32 @@ Review the serving configuration for the deployed model:
 . Click the *Deployments* tab and locate `nemotron-3-nano-30b-a3b`.
 . Confirm the model row shows *Ready* in the *Status* column.
 
-Verify the model is registered with MaaS — publishing created a `MaaSModelRef`
-in the model's project namespace:
+Publishing registers the model with MaaS through a `MaaSModelRef` in the
+model's project namespace:
+
+[source,yaml]
+----
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSModelRef
+metadata:
+  name: nemotron-3-nano-30b-a3b
+  namespace: {project-namespace}
+spec:
+  modelRef:
+    kind: LLMInferenceService
+    name: nemotron-3-nano-30b-a3b
+  tenantRef: models-as-a-service
+----
+
+[NOTE]
+====
+The explicit `tenantRef` is the advanced override — required when the
+`LLMInferenceService` was first attached to a non-MaaS gateway. When a model
+is published directly to the MaaS gateway, the tenant resolves
+automatically.
+====
+
+Verify the model is registered with MaaS:
 
 [source,bash,role="execute"]
 ----
@@ -138,12 +182,43 @@ The model also appears on the shared service surface consumers use:
 . Click *View* to open the *Endpoints* dialog. Confirm the dialog shows a *Model
 as a Service* badge and your subscription assignment.
 
+[NOTE]
+====
+*AI asset endpoints* is a Technology Preview feature in Red Hat OpenShift AI 3.6.
+====
+
 image::302-ai-asset-endpoints.png[AI asset endpoints page with the model showing Ready status and View in the Endpoints column,link=self,window=blank,width=700]
 
-The subscription that grants groups access to the model was provisioned as a
-`MaaSSubscription` in the `models-as-a-service` namespace — the only namespace
-the MaaS API reads subscriptions from. Review the subscription (shown here for
-the free tier):
+== 3.3 — Configure Access Controls and API Endpoints
+
+.5 minutes
+
+Access to the model service is governed by subscription tiers. This environment
+has two tiers, each backed by OpenShift owner groups:
+
+[cols="1,2,1,2"]
+|===
+|Subscription |Owner group |Priority |Token rate limits
+
+|`maas-free-subscription`
+|`system:authenticated`
+|10
+|20,000 tokens/min and 1,000 tokens/sec
+
+|`maas-premium-subscription`
+|`premium-users`
+|20
+|1,000,000 tokens/min and 20,000 tokens/sec
+|===
+
+The priority level decides which subscription is selected when creating an API
+key without specifying one — higher numbers win, so users who belong to both
+groups default to the premium tier. Specifying the subscription explicitly
+bypasses priority selection.
+
+Each tier is provisioned as a `MaaSSubscription` and a matching
+`MaaSAuthPolicy` in the `models-as-a-service` namespace — the only namespace
+the MaaS API reads subscriptions from. Review the free-tier pair:
 
 [source,yaml]
 ----
@@ -186,6 +261,15 @@ spec:
       - name: system:authenticated
 ----
 
+[IMPORTANT]
+====
+Governance pairing needs an active subscription AND a matching authorization
+policy for the model. The subscription defines the token quota; the
+authorization policy grants gateway access. Without both, requests fail at
+the gateway: HTTP 429 when no subscription quota matches, HTTP 403 when no
+authorization policy grants your group access.
+====
+
 Verify both resources exist:
 
 [source,bash,role="execute"]
@@ -203,44 +287,19 @@ after publishing, an administrator adds the model to a subscription to make it
 accessible to user groups.
 ====
 
-== 3.3 — Configure Access Controls and API Endpoints
-
-.5 minutes
-
-Access to the model service is governed by subscription tiers. This environment
-has two tiers, each backed by OpenShift owner groups:
-
-[cols="1,2,1,2"]
-|===
-|Subscription |Owner group |Priority |Token rate limits
-
-|`maas-free-subscription`
-|`system:authenticated`
-|10
-|20,000 tokens/min and 1,000 tokens/sec
-
-|`maas-premium-subscription`
-|`premium-users`
-|20
-|1,000,000 tokens/min and 20,000 tokens/sec
-|===
-
-The priority level decides which subscription is selected when creating an API
-key without specifying one — higher numbers win, so users who belong to both
-groups default to the premium tier. Specifying the subscription explicitly
-bypasses priority selection.
-
 Review your own subscription assignments from the consumer view:
 
-. Navigate to *Gen AI studio → API keys* and select the *Subscriptions* tab.
+. Navigate to *Gen AI studio → API keys*. In RHOAI 3.6 this page
+(`/maas/keys-and-subs`) combines API keys and subscriptions — the subscription
+tiers are on the same page rather than a separate tab.
 . Expand a subscription row to see the models it includes, with their token rate
 limits formatted as the number of tokens per time window.
 
-image::303-maas-subscription-tiers.png[Subscriptions tab showing the subscription tiers and token rate limits,link=self,window=blank,width=700]
+image::303-maas-subscription-tiers.png[Subscriptions view showing the subscription tiers and token rate limits,link=self,window=blank,width=700]
 
 Create an API key scoped to the premium subscription:
 
-. On the *API keys* tab, click *Create API key*.
+. On the *API keys* page, click *Create API key*.
 . In the *Create API key* dialog, enter `Workshop` in the *Name* field.
 . From the *Subscription* dropdown, select `maas-premium-subscription`. The
 *Models* section displays the included model and its configured token limits —
@@ -336,6 +395,29 @@ monitor serving behavior under load and connect metrics to scaling decisions.
 Use the premium-tier key (1,000,000 tokens/min) for load generation so the
 subscription limit does not throttle the test.
 ====
+
+Before testing the endpoint, confirm the model finished MaaS governance
+pairing — the `MaaSModelRef` status conditions must all report `True`:
+
+[source,bash,role="execute"]
+----
+oc get maasmodelref nemotron-3-nano-30b-a3b -n {project-namespace} -o json \
+  | jq -r '.status.conditions[] | "\(.type)=\(.status)"'
+----
+
+Expected output:
+
+----
+Ready=True
+GovernanceAttached=True
+RuntimeReady=True
+ModelIdentityUnique=True
+----
+
+`GovernanceAttached` confirms the subscription and authorization policy
+pairing from section 3.3 is active, `RuntimeReady` confirms the model serving
+runtime is up, and `Ready=True` reports the model phase is `Ready` — the model
+is serving through the MaaS gateway.
 
 Verify the endpoint is externally reachable. Set the values you recorded in
 section 3.3 as environment variables (run these in the same terminal session so

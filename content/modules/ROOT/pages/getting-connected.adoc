@@ -34,10 +34,10 @@ These credentials are scoped to your lab environment — do not share them.
 
 == Cluster environment
 
-Your environment runs OpenShift with Red Hat OpenShift AI (RHOAI) 3.5
+Your environment runs OpenShift with Red Hat OpenShift AI (RHOAI) 3.6
 installed and configured for this workshop:
 
-* *RHOAI 3.5* — includes EvalHub for evaluations, Model-as-a-Service (MaaS)
+* *RHOAI 3.6* — includes EvalHub for evaluations, Model-as-a-Service (MaaS)
   governance with subscription tiers and API keys, and the observability
   dashboard.
 * *Your own project* — you work in your assigned project (namespace)

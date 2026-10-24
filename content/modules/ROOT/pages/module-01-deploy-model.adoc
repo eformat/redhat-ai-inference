@@ -214,7 +214,7 @@ configuration used in this lab, simplified for readability:
 
 [source,yaml]
 ----
-apiVersion: serving.kserve.io/v1alpha1
+apiVersion: serving.kserve.io/v1alpha2
 kind: LLMInferenceService
 metadata:
   name: nemotron-3-nano-30b-a3b
@@ -231,23 +231,25 @@ spec:
     name: nemotron-3-nano-30b-a3b
     uri: oci://registry.redhat.io/rhai/modelcar-nvidia-nemotron-3-nano-30b-a3b-fp8:3.0
   replicas: 1
+  router:
+    gateway:
+      refs:
+        - name: openshift-ai-inference
+          namespace: openshift-ingress
+    route: {}
   template:
     containers:
       - name: main
-        image: registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.1
-        command:
-          - python
-          - -m
-          - vllm.entrypoints.openai.api_server
-        args:
-          - --model=/mnt/models
-          - --served-model-name=nemotron-3-nano-30b-a3b
-          - --max-model-len=131072
-          - --enable-auto-tool-choice
-          - --tool-call-parser=qwen3_coder
-          - --trust-remote-code
-          - --reasoning-parser-plugin=/mnt/models/nano_v3_reasoning_parser.py
-          - --reasoning-parser=nano_v3
+        image: registry.redhat.io/rhaiis/vllm-cuda-rhel9:3.3.1
+        env:
+          - name: VLLM_ADDITIONAL_ARGS
+            value: >-
+              --max-model-len=131072
+              --enable-auto-tool-choice
+              --tool-call-parser=qwen3_coder
+              --trust-remote-code
+              --reasoning-parser-plugin=/mnt/models/nano_v3_reasoning_parser.py
+              --reasoning-parser=nano_v3
         resources:
           requests:
             cpu: "2"
@@ -279,16 +281,23 @@ the image filesystem instead of downloading from remote object storage.
 | One model server replica, holding one GPU. Scaling replicas out for
 shared consumption is covered in Module 3.
 
+| `spec.router.gateway`
+| Attaches the deployment to the `openshift-ai-inference` gateway in the
+`openshift-ingress` project. The gateway terminates TLS and serves the
+model's external route over HTTPS.
+
 | `spec.template.containers.image`
-| The serving image, `rhaii/vllm-cuda-rhel9:3.5.1`, which runs the
-OpenAI-compatible vLLM engine on NVIDIA GPUs.
+| The serving image, `rhaiis/vllm-cuda-rhel9:3.3.1`, which runs the
+OpenAI-compatible vLLM engine on NVIDIA GPUs. The image entrypoint handles
+TLS setup and the vLLM launch, so no container `command` override is set.
 
 | `resources`
 | Requests of 2 CPU / 16 Gi memory / 1 GPU and limits of 4 CPU / 24 Gi
 memory / 1 GPU, sized for the Nemotron model on a single L40S GPU node.
 
-| custom runtime arguments (`args`)
-| `--max-model-len=131072` sets a 131,072-token context window;
+| custom runtime arguments (`VLLM_ADDITIONAL_ARGS`)
+| Passed to vLLM through the `VLLM_ADDITIONAL_ARGS` environment variable.
+`--max-model-len=131072` sets a 131,072-token context window;
 `--enable-auto-tool-choice` with `--tool-call-parser=qwen3_coder` enables
 tool-calling; `--trust-remote-code` allows the model's custom code;
 `--reasoning-parser-plugin` and `--reasoning-parser=nano_v3` enable the

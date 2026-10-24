@@ -70,6 +70,11 @@ collection, or provider level. Each benchmark declares a primary score metric
 . Review the evaluations list. From the *Project* dropdown menu you can
 filter the list to show only evaluations from a selected project namespace.
 
+[NOTE]
+====
+*Evaluations* is a Technology Preview feature in Red Hat OpenShift AI 3.6.
+====
+
 // Live capture in Act phase: full-page screenshot of the OpenShift AI dashboard Evaluations page (Develop & train → Evaluations) with the evaluations list and Project dropdown visible.
 image::201-evaluations-page.png[Evaluations page with the evaluations list and Project dropdown,link=self,window=blank,width=700]
 
