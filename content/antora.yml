@@ -10,5 +10,5 @@ asciidoc:
     page-pagination: true
     guid: '%GUID%'
     ssh_user: 'lab-user'
-    ssh_password: 'r3dh4t1!'
+    ssh_password: 'password'
     openshift_console_url: 'https://console-openshift-console.apps.cluster.example.com'
