@@ -33,7 +33,7 @@ model from the model catalog, configure model server parameters — runtime,
 replicas, and resource limits — and confirm the model responds to a test
 inference request.
 
-== 1.1 — Explore the lab environment
+== Exercise 1: Explore the lab environment
 
 Your lab environment is a Red Hat AI Enterprise cluster: OpenShift plus
 OpenShift AI, with an NVIDIA L40S 48 GB GPU worker node reserved for your
@@ -111,11 +111,12 @@ Platform-level components — the serving runtime templates, operators, and
 the DataScienceCluster configuration — are managed by the cluster
 administrator and run outside your project.
 
-image::101-project-layout.png[Projects page showing your project,link=self,window=blank,width=700]
+image::101-project-layout.png[Projects page showing the lab-user-dev student project,link=self,window=blank,width=700]
 
-// NOTE: screenshot placeholder — capture the Projects page showing the student project during the Act phase.
+== Exercise 2: Deploy the model for inference
 
-== 1.2 — Deploy the model for inference
+Now that you have confirmed the environment is ready, you will deploy the
+model for inference.
 
 === Select the model
 
@@ -176,13 +177,13 @@ in the *Use case* field.
 .. Optional: select *Model access* to make the model available through an
 external route.
 .. Select *Require token authentication* and enter a service account name,
-for example `model-tester`. You use the generated token in section 1.3.
+for example `model-tester`. You use the generated token in Exercise 3.
 .. In the *Deployment strategy* section, select *Rolling update*.
 . Click *Deploy*.
 
-Verification: the deployed model appears on the *Deployments* tab of your
-project and on the *Deployments* page of the dashboard with a checkmark in
-the *Status* column.
+Verification: the deployed model appears with a *Ready* status on the
+*Gen AI studio → AI asset endpoints* page (if you selected *Add as AI asset
+endpoint*), and the model server pod shows *Running* in your project.
 
 Watch the model server pod come up:
 
@@ -202,9 +203,11 @@ up. On a first deployment the server also initializes the vLLM engine, so
 give it a few minutes. The lab environment pre-pulls the model and serving
 images, which keeps startup time short.
 
-image::101-deployment-status.png[Deployments tab with the model showing a Ready status checkmark,link=self,window=blank,width=700]
+In the dashboard, the deployed model shows a *Ready* status on the
+*Gen AI studio → AI asset endpoints* page (if you selected *Add as AI asset
+endpoint*) once it finishes deploying.
 
-// NOTE: screenshot placeholder — capture the Deployments tab with the Ready checkmark during the Act phase.
+image::101-deployment-status.png[AI asset endpoints page showing the deployed model with Ready status,link=self,window=blank,width=700]
 
 === What the wizard creates
 
@@ -315,7 +318,10 @@ module carry forward unchanged through all subsequent modules (Modules 2-6).
 Do not scale down, redeploy, or rename the model between modules.
 ====
 
-== 1.3 — Verify the deployment
+== Exercise 3: Verify the deployment
+
+Now that the model is deployed, you will verify that it is running and
+accepting inference requests.
 
 === Check the pod and model status
 
@@ -347,19 +353,17 @@ the model is ready to accept inference requests.
 
 === Locate the inference endpoint and token
 
-. From the OpenShift AI dashboard, click *AI hub → Deployments*. The
-inference endpoint for the model is shown in the *Inference endpoints*
-field. Copy the endpoint URL.
-. To see the endpoints from the project details page instead, go to your
-project's *Deployments* tab and click *Internal and external endpoint*.
-. If you enabled token authentication, expand the section for your model on
-the *Deployments* tab. Your authentication token is shown in the *Token
-authentication* section, in the *Token secret* field. Click *Copy* and save
-it.
+. From the OpenShift AI dashboard, open *Gen AI studio → AI asset
+endpoints*. Locate the model's row and click *View* in the *Endpoints*
+column — the dialog shows the external and internal API endpoint URLs.
+Copy the endpoint URL.
 
-image::101-inference-endpoint.png[Expanded deployment showing the inference endpoint and token secret,link=self,window=blank,width=700]
+image::101-inference-endpoint.png[Endpoints dialog showing the external and internal API endpoint URLs for the model,link=self,window=blank,width=700]
 
-// NOTE: screenshot placeholder — capture the expanded deployment showing the inference endpoint and token secret during the Act phase.
+. To authenticate requests, mint a token for the service account you named
+in *Require token authentication* by running `oc create token model-tester`,
+and save the output. (Module 3 mints a subscription-scoped MaaS API key
+instead, with the same `Authorization: Bearer` header pattern.)
 
 === Send a test inference request
 
@@ -424,11 +428,25 @@ expose the model as a Model-as-a-Service in Module 3.
 Your model is now deployed, running, and accepting inference requests — the
 foundation for every module that follows.
 
-== Key takeaways
+== Module summary
+
+**What you accomplished:**
+
+* Explored the lab environment and confirmed the platform and GPU node were ready.
+* Deployed the model for inference with the vLLM NVIDIA GPU ServingRuntime for KServe.
+* Verified the deployment and sent a test inference request through the OpenAI-compatible endpoint.
+
+**Key takeaways:**
 
 * Red Hat AI Enterprise provides a streamlined workflow for deploying models to inference endpoints.
 * A deployed model must be verified before it can be evaluated or exposed to consumers.
 * Model server configuration — runtime, replicas, and resource limits — determines how the model serves inference requests.
+
+**Next steps:**
+
+Now that the model is deployed and accepting inference requests, continue to
+xref:module-02-evaluate-benchmark.adoc[Module 2] to benchmark its performance
+with EvalHub.
 
 '''
 

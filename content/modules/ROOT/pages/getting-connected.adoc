@@ -16,9 +16,6 @@ Your lab environment is a dedicated OpenShift cluster. Open the
 link:{openshift_console_url}[OpenShift web console,window=_blank] — or use
 the *OpenShift Console* tab in the workshop interface.
 
-// NOTE: Live console screenshots are captured in the Act phase.
-image::001-getting-connected-console.png[OpenShift web console login page,link=self,window=blank,width=700]
-
 == Login credentials
 
 Log in to the OpenShift console, the OpenShift AI dashboard, and the
@@ -55,6 +52,8 @@ the OpenShift console, click the Application Launcher (waffle menu, in the
 masthead) and select *Red Hat OpenShift AI*. You can also use the
 *OpenShift AI* tab in the workshop interface. If prompted, choose
 *Log in with OpenShift* and enter your lab credentials.
+
+image::001-getting-connected-console.png[Red Hat OpenShift AI dashboard home after logging in,link=self,window=blank,width=700]
 
 The OpenShift console itself has two perspectives, switched from the
 perspective selector in the masthead:

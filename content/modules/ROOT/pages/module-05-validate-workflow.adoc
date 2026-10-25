@@ -30,7 +30,7 @@ By the end of this module you will be able to:
 * Verify end-to-end request flow from application request to model response
 * Troubleshoot common issues in the serving chain between the application and the model
 
-== 5.1 — Trace a Request Through the Serving Chain
+== Exercise 1: Trace a request through the serving chain
 
 .5 minutes
 
@@ -51,7 +51,7 @@ image::501-serving-chain.png[Annotated serving-chain diagram from application th
 
 Send one request and follow it through every layer:
 
-. Open the application interface and send a request that triggers an inference call. Note the response — this is your *baseline*. Copy it now: section 5.4 compares against it to prove the chain is still healthy after the failure simulations.
+. Open the application interface and send a request that triggers an inference call. Note the response — this is your *baseline*. Copy it now: Exercise 4 compares against it to prove the chain is still healthy after the failure simulations.
 
 . Inspect the application logs to confirm the outbound request was sent:
 
@@ -94,7 +94,7 @@ image::503-gateway-logs.png[Gateway istio-proxy access log with the 200 entry,li
 
 . Inspect the model server logs to confirm the inference request was received and processed:
 
-[source,bash,role="execute"]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
 MODEL_POD=$(oc get pods -n {project-namespace} -o name | grep '^pod/nemotron-3-nano-30b-a3b-predictor' | head -1)
 oc logs -n {project-namespace} ${MODEL_POD} --tail=20
@@ -118,17 +118,20 @@ image::504-model-server-logs.png[Model server logs showing the request received 
 ====
 Set the values recorded in Module 3 as environment variables — later steps use them. Run these in the same terminal session so they remain available:
 
-[source,bash,role="execute"]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-export MAAS_URL="<the external API endpoint URL copied from the Endpoints dialog>"
-export MAAS_API_KEY="<the sk-oai- API key you copied>"
+export MAAS_URL="{maas_url}"
+export MAAS_API_KEY="{maas_api_key}"
 export MODEL_ID=$(curl -s "${MAAS_URL}/v1/models" -H "Authorization: Bearer ${MAAS_API_KEY}" | jq -r '[.data[] | select(.ready==true)][0].id')
 ----
 ====
 
-== 5.2 — Verify Each Component
+== Exercise 2: Verify each component
 
 .5 minutes
+
+Now that you have traced one request through every layer, you will verify
+each component's health.
 
 Work through the checklist layer by layer — each step gives the command and what healthy looks like.
 
@@ -146,7 +149,7 @@ NAME                            READY   STATUS    RESTARTS   AGE
 maas-chat-client-7d9f8b6c5-xr2kp  1/1     Running   0          25m
 ----
 
-Confirm the application interface still returns responses (send one as in section 5.1).
+Confirm the application interface still returns responses (send one as in Exercise 1).
 
 . *MaaS subscription and API keys valid.* The subscription and authorization policy provisioned in Module 3 must both exist:
 
@@ -184,7 +187,7 @@ maas-default-gateway-istio-6f9b7d8c4-xq2lp    1/1     Running   0          2d
 
 . *Model server Ready and serving.* The `LLMInferenceService` deployed in Module 1 (scaled to two replicas in Module 3) must report `READY`:
 
-[source,bash,role="execute"]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
 oc get llminferenceservice nemotron-3-nano-30b-a3b -n {project-namespace}
 ----
@@ -198,7 +201,7 @@ nemotron-3-nano-30b-a3b             True    45m
 
 . *Metrics endpoints.* The model server exposes Prometheus metrics on port `8080` at `/metrics`. Forward the port and scrape it:
 
-[source,bash,role="execute"]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
 # Terminal 1 — forward the model server metrics port
 oc port-forward -n {project-namespace} ${MODEL_POD} 8480:8080
@@ -220,7 +223,7 @@ vllm:num_requests_running{model_name="publishers/{project-namespace}/models/nemo
 The MaaS gateway also exposes Envoy telemetry metrics — the surface Module 6 consumes when monitoring serving behavior under load. If metrics are missing here, Module 6 will have nothing to display; fix metrics access before moving on.
 ====
 
-. *Document the healthy trace.* Summarize what healthy looks like at each step — this is the reference you troubleshoot against in section 5.3:
+. *Document the healthy trace.* Summarize what healthy looks like at each step — this is the reference you troubleshoot against in Exercise 3:
 
 [cols="1,2,2"]
 |===
@@ -243,9 +246,12 @@ The MaaS gateway also exposes Envoy telemetry metrics — the surface Module 6 c
 |Application response body
 |===
 
-== 5.3 — Troubleshoot a Simulated Failure
+== Exercise 3: Troubleshoot a simulated failure
 
 .5 minutes
+
+Now that you know what healthy looks like at every layer, you will
+introduce — and fix — simulated failures.
 
 Both scenarios follow the same discipline: *introduce* a reversible failure, *observe* the error behavior in the logs, *diagnose* which layer broke, then *fix* and *revert*. The key diagnostic: a failure at one layer leaves the layers below it silent — if the model server logs show no request, the break is upstream at the gateway or the application.
 
@@ -296,7 +302,7 @@ Expected output (representative):
 
 Check the model server — it is *silent*, because the gateway rejected the request before forwarding it:
 
-[source,bash,role="execute"]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
 oc logs -n {project-namespace} ${MODEL_POD} --tail=10
 ----
@@ -320,21 +326,21 @@ Distinguish the two authorization errors: *401* (`authentication_error`, "Invali
 Mint a new key using the Module 3 flow: in the dashboard, navigate to *Gen AI studio → API keys*, click *Create API key*, name it, select your subscription, choose an expiration, and click *Create*. Copy the plaintext key (with the `sk-oai-` prefix) — it is displayed only once.
 
 Update the application to use the new key with the same mechanism you used in
-Module 4 — patch the `maas-credentials` Secret created in section 4.2 (it lives
+Module 4 — patch the `maas-credentials` Secret created in Module 4, Exercise 2 (it lives
 in your project), then restart the rollout:
 
-[source,bash,role="execute"]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
 oc patch secret maas-credentials --type merge \
-  -p '{"stringData":{"MAAS_API_KEY":"<the new sk-oai- key>"}}'
+  -p '{"stringData":{"MAAS_API_KEY":"{maas_api_key}"}}'
 oc rollout restart deployment/maas-chat-client
 ----
 
 Wait for the rollout to complete, then send a request from the application interface again. It succeeds with `200` — the environment is restored. Re-export the new key for the rest of this module:
 
-[source,bash,role="execute"]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-export MAAS_API_KEY="<the new sk-oai- API key>"
+export MAAS_API_KEY="{maas_api_key}"
 ----
 
 [NOTE]
@@ -438,17 +444,17 @@ Expected output:
 stop
 ----
 
-== 5.4 — Confirm End-to-End Reliability
+== Exercise 4: Confirm end-to-end reliability
 
 .5 minutes
 
 After restoring from both failures, prove the serving chain is back to its baseline.
 
-. *Re-run the happy path through the application.* Send a request from the application interface and compare the response to the baseline captured in section 5.1: same structure, `finish_reason: stop`, and a completion consistent with the original — the chain recovers end-to-end after the failure cycle.
+. *Re-run the happy path through the application.* Send a request from the application interface and compare the response to the baseline captured in Exercise 1: same structure, `finish_reason: stop`, and a completion consistent with the original — the chain recovers end-to-end after the failure cycle.
 
 . *Re-run the direct API check.* The same curl from Scenario B still returns `stop` with HTTP 200 — a completion in the same OpenAI-compatible format as the baseline, including `usage` token counts.
 
-. *Verify metrics are still flowing.* Scrape the model server metrics endpoint again and confirm the counters advanced past the values seen in section 5.2 — through the failed attempts and the recovery, the serving chain kept emitting telemetry:
+. *Verify metrics are still flowing.* Scrape the model server metrics endpoint again and confirm the counters advanced past the values seen in Exercise 2 — through the failed attempts and the recovery, the serving chain kept emitting telemetry:
 
 [source,bash,role="execute"]
 ----
@@ -459,7 +465,7 @@ Expected output: live metric series with updated counter values.
 
 [NOTE]
 ====
-Metrics still flowing is the handoff to Module 6, where you watch these same series on the observability dashboard while the application generates load. If the counters did not move, revisit section 5.2 before continuing.
+Metrics still flowing is the handoff to Module 6, where you watch these same series on the observability dashboard while the application generates load. If the counters did not move, revisit Exercise 2 before continuing.
 ====
 
 . *Summarize the serving chain health.* At this point you have verified:
@@ -470,12 +476,25 @@ Metrics still flowing is the handoff to Module 6, where you watch these same ser
 * Model server `READY`, receiving requests, serving completions
 * Metrics flowing from the model server for Module 6
 
-== Key takeaways
+== Module summary
+
+**What you accomplished:**
+
+* Traced a request through the serving chain and verified each component.
+* Troubleshot simulated failures — an invalid API credential and an oversized request body.
+* Confirmed end-to-end reliability against the baseline.
+
+**Key takeaways:**
 
 * End-to-end validation confirms that deployment, serving, access control, and application integration are all working together.
 * Tracing a request through the serving chain reveals where failures occur when something breaks.
 * Structured troubleshooting — checking logs at each layer — is essential for maintaining production AI services.
 * Keep request payloads under roughly 3.8 MB through the MaaS gateway: oversized bodies fail with an opaque HTTP 500 and an empty body (RHOAIENG-99765), not a 413.
+
+**Next steps:**
+
+The serving chain is validated end-to-end: continue to
+xref:module-06-monitor-observability.adoc[Module 6] to monitor it under load.
 
 '''
 

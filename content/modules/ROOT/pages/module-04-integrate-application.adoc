@@ -33,7 +33,7 @@ By the end of this module you will be able to:
 * Integrate a model service into an application using standard API patterns
 * Configure application-side settings to consume the Model-as-a-Service endpoint
 
-== 4.1 — Review the Sample Application
+== Exercise 1: Review the sample application
 
 .3 minutes
 
@@ -69,17 +69,17 @@ module are placeholders, captured live during the Act phase.
 From the file explorer, open the `maas-chat-client` directory in the cloned
 repository. It contains `maas_chat_client.py` — the complete chat client, a
 single Python file with no third-party dependencies — and `deploy/deployment.yaml`,
-the Deployment that runs the client on the cluster in section 4.3.
+the Deployment that runs the client on the cluster in Exercise 3.
 
 The client is Python 3 and uses only the standard library — `urllib` for HTTP
 and `json` for payloads — so there is nothing to install and no SDK lock-in.
 The same file runs two ways:
 
 * *Interactive* (default) — a chat loop in your terminal. You type prompts and
-the client prints the model's responses. You use this mode in section 4.4.
+the client prints the model's responses. You use this mode in Exercise 4.
 * *Request loop* — set the `MAAS_INTERVAL` variable to a positive number of
 seconds and the client repeatedly sends a fixed prompt and logs each completion.
-The pod in section 4.3 uses this mode to keep consuming the endpoint steadily
+The pod in Exercise 3 uses this mode to keep consuming the endpoint steadily
 — the traffic Module 6 monitors.
 
 All configuration is read from environment variables at startup:
@@ -200,21 +200,24 @@ if __name__ == "__main__":
     main()
 ----
 
-== 4.2 — Configure the Application
+== Exercise 2: Configure the application
 
 .7 minutes
+
+Now that you have reviewed the application and its configuration surface,
+you will wire in your endpoint URL and API key.
 
 The application needs exactly two values from Module 3 — the external API
 endpoint URL and the `sk-oai-` API key. You provide them as environment
 variables for the client in your workspace, and as a Secret for the on-cluster
-deployment in section 4.3. Configuration is the only integration work.
+deployment in Exercise 3. Configuration is the only integration work.
 
 === Configure the application
 
 In the Dev Spaces terminal, set the endpoint URL and API key you recorded in
 Module 3. Replace the placeholders with your values:
 
-[source,role="execute"]
+[source,role="execute",subs="specialcharacters,attributes"]
 ----
 export MAAS_URL="{maas_url}"
 export MAAS_API_KEY="{maas_api_key}"
@@ -272,7 +275,7 @@ Endpoint*.
 **Chat Completions API** as the API type.
 . VS Code opens a `chatLanguageModels.json` file. Register the model:
 
-[source,json]
+[source,json,subs="specialcharacters,attributes"]
 ----
 {
   "id": "publishers/{project-namespace}/models/nemotron-3-nano-30b-a3b",
@@ -306,10 +309,10 @@ and select *Update API Key*.
 ====
 This VS Code configuration is client-side only — it wires your editor to the
 endpoint. It is separate from the on-cluster application deployment in
-section 4.3, even though both consume the same endpoint and the same API key.
+Exercise 3, even though both consume the same endpoint and the same API key.
 ====
 
-== 4.3 — Deploy the Application
+== Exercise 3: Deploy the application
 
 .5 minutes
 
@@ -319,7 +322,7 @@ network — the endpoint you verified in Module 3 is reachable in-cluster too.
 
 The `deploy/deployment.yaml` manifest in the workspace mounts the client code
 from a ConfigMap and injects configuration from the `maas-credentials` Secret
-you created in section 4.2:
+you created in Exercise 2:
 
 [source,yaml]
 ----
@@ -340,24 +343,30 @@ spec:
       containers:
         - name: chat-client
           image: registry.access.redhat.com/ubi9/python-311:latest
-          command: ["/bin/bash", "-c", "python3 /opt/client/maas_chat_client.py"]
+          command: ["/bin/bash", "-c", "python3 /opt/client/maas_chat_client.py"] # <1>
           envFrom:
             - secretRef:
-                name: maas-credentials
+                name: maas-credentials # <2>
           env:
             - name: MAAS_PROMPT
-              value: "Explain Model-as-a-Service in one sentence."
+              value: "Explain Model-as-a-Service in one sentence." # <3>
             - name: MAAS_INTERVAL
               value: "30"
           volumeMounts:
             - name: client-code
-              mountPath: /opt/client
+              mountPath: /opt/client # <4>
               readOnly: true
       volumes:
         - name: client-code
           configMap:
-            name: maas-chat-client
+            name: maas-chat-client # <5>
 ----
+
+<1> *Entry point* -- Runs the client script mounted from the ConfigMap below, so no image build is required.
+<2> *Credential injection* -- Injects `MAAS_URL` and `MAAS_API_KEY` from the `maas-credentials` Secret as environment variables.
+<3> *Request-loop mode* -- `MAAS_PROMPT` and `MAAS_INTERVAL` switch the client from the interactive chat loop to sending one request every 30 seconds.
+<4> *Read-only code mount* -- Mounts the client code at `/opt/client`; `readOnly` prevents the pod from modifying it.
+<5> *Code source* -- The ConfigMap that the `oc create configmap` command in the next step populates with the client script.
 
 There is nothing model-specific in the manifest: the image is a plain Python
 runtime, and all environment-specific values — endpoint URL and API key — come
@@ -401,7 +410,7 @@ the property this module demonstrates.
 
 image::404-deployment-running.png[Running chat client deployment with a ready pod,link=self,window=blank,width=700]
 
-== 4.4 — Send Requests and Observe Responses
+== Exercise 4: Send requests and observe responses
 
 .5 minutes
 
@@ -412,7 +421,7 @@ pod on the cluster, and your VS Code assistant.
 === Send requests through the chat client
 
 In the Dev Spaces terminal (with `MAAS_URL` and `MAAS_API_KEY` still exported
-from section 4.2), start the client in interactive mode:
+from Exercise 2), start the client in interactive mode:
 
 [source,role="execute"]
 ----
@@ -435,7 +444,7 @@ image::405-chat-client-response.png[Chat client terminal session showing a model
 
 === Observe the deployed pod consuming the endpoint
 
-The pod in section 4.3 has been sending its own requests every 30 seconds.
+The pod in Exercise 3 has been sending its own requests every 30 seconds.
 Watch its log to confirm the on-cluster integration works:
 
 [source,role="execute"]
@@ -458,7 +467,7 @@ OpenAI-compatible response format. Module 5 traces exactly this path.
 
 === Use the model from your editor
 
-If you registered the model with VS Code Chat in section 4.2, the same
+If you registered the model with VS Code Chat in Exercise 2, the same
 endpoint now powers your AI assistant:
 
 . Open the AI chat panel in VS Code (focus the editor, then press
@@ -473,7 +482,7 @@ and token accounting as the application's requests.
 image::406-copilot-chat-inference.png[VS Code chat panel returning a response from the MaaS endpoint,link=self,window=blank,width=700]
 
 Switching the chat to *Agent* mode unlocks file-editing actions: the
-`toolCalling: true` setting you configured in section 4.2 is what lets the
+`toolCalling: true` setting you configured in Exercise 2 is what lets the
 model call the editor's tools.
 
 [NOTE]
@@ -484,12 +493,26 @@ subscription's rate limits from Module 3. The pod's request loop adds steady
 traffic for the observability dashboard in Module 6.
 ====
 
-== Key takeaways
+== Module summary
+
+**What you accomplished:**
+
+* Reviewed the sample application and its OpenAI-compatible integration pattern.
+* Configured the application with the MaaS endpoint URL and API key.
+* Deployed the application to the cluster and observed inference responses flow.
+
+**Key takeaways:**
 
 * Standard API patterns (REST/OpenAI-compatible endpoints) make model services consumable by any application without custom integration code.
 * Application-side configuration requires the MaaS endpoint URL and valid API credentials.
 * The integration pattern used here is reusable for connecting any application to a model service on Red Hat AI Enterprise.
 * One endpoint serves many consumers — the deployed application and your own AI assistant in VS Code — and the running pod is the input to Module 5 validation and Module 6 monitoring.
+
+**Next steps:**
+
+The application is running and consuming the endpoint: continue to
+xref:module-05-validate-workflow.adoc[Module 5] to validate the end-to-end
+request flow.
 
 '''
 

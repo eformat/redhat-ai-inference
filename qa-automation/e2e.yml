@@ -228,6 +228,12 @@
       failed_when: result.rc != 0 and 'already exists' not in result.stderr
       changed_when: "'already exists' not in result.stderr"
 
+    - name: "M1 | Label the project so it appears in the RHOAI dashboard projects UI (idempotent)"
+      ansible.builtin.command: oc label namespace {{ project_name }} opendatahub.io/dashboard=true --overwrite
+      register: ns_label
+      failed_when: ns_label.rc != 0
+      changed_when: ns_label.stdout is search('labeled|not labeled')
+
     - name: "M1 | Create the model-tester service account (idempotent)"
       kubernetes.core.k8s:
         definition:

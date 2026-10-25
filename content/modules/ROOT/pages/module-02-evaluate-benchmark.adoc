@@ -22,12 +22,12 @@ Module 1 completed — model deployed and serving inference requests.
 .Duration
 20 minutes (3 min explore / 7 min run / 5 min analyze / 5 min repeatable workflow)
 
-== Learning Objectives
+== Learning objectives
 
 * Analyze model inference performance using EvalHub for evaluations
 * Configure a repeatable evaluation workflow for tracking model performance over time
 
-== 2.1 — Explore EvalHub
+== Exercise 1: Explore EvalHub
 
 EvalHub is an evaluation orchestration service for large language models
 (LLMs) on Red Hat OpenShift AI. It provides a versioned REST API for
@@ -75,8 +75,17 @@ filter the list to show only evaluations from a selected project namespace.
 *Evaluations* is a Technology Preview feature in Red Hat OpenShift AI 3.6.
 ====
 
-// Live capture in Act phase: full-page screenshot of the OpenShift AI dashboard Evaluations page (Develop & train → Evaluations) with the evaluations list and Project dropdown visible.
-image::201-evaluations-page.png[Evaluations page with the evaluations list and Project dropdown,link=self,window=blank,width=700]
+// TODO(wrong-capture): 201-evaluations-page.png shows the Evaluations page in an
+// "Evaluations unavailable" error state — the evaluation service itself is not
+// running. Status 2026-10-25: the evalhubs CRD and the EvalHub CR are deployed
+// (shipped-CRD stopgap in the rhoai-cluster-pool prelude-nightly-36 overlay),
+// but the pinned 3.6.0-ea.2 odh-trustyai-module-operator predates the
+// enabledServices injection (trustyai-service-operator #915/#920), so the
+// service operator still runs --enable-services=NEMO_GUARDRAILS only and the
+// page says "enable the evaluation service using the TrustyAI Operator".
+// Re-capture the OpenShift AI dashboard Evaluations page (Develop & train →
+// Evaluations) with the evaluations list visible once the platform ships the
+// newer module-operator build.
 
 If the *Evaluations* page is not visible, an administrator must enable it by
 setting `disableEvalHub` to `false` in the `OdhDashboardConfig` custom
@@ -131,11 +140,11 @@ benchmark with its ID, category, and metrics:
 evalhub providers describe lm_evaluation_harness
 ----
 
-== 2.2 — Run a Benchmark Evaluation
+== Exercise 2: Run a benchmark evaluation
 
-In this section you benchmark the model deployed in Module 1 against a
-quality benchmark from the `lm_evaluation_harness` provider, either from the
-OpenShift AI dashboard or from the EvalHub CLI.
+Now that you have explored EvalHub and its providers, you will run a
+benchmark evaluation against the model you deployed in Module 1, either
+from the OpenShift AI dashboard or from the EvalHub CLI.
 
 === Submit an evaluation job from the dashboard
 
@@ -190,7 +199,7 @@ Most providers expect the model URL to point to an OpenAI-compatible
 inference endpoint; the required URL format can vary by provider, so use the
 internal endpoint URL from your Module 1 deployment:
 
-[source,role="execute"]
+[source,role="execute",subs="specialcharacters,attributes"]
 ----
 evalhub eval run \
   --name {model-name}-baseline \
@@ -203,7 +212,7 @@ evalhub eval run \
 The server accepts the job and returns a job ID that you use to track
 results. You can also submit the job from a YAML config file with
 `evalhub eval run --config evaljob.yaml` — you will build exactly that
-reusable config file in section 2.4.
+reusable config file in Exercise 4.
 
 === Wait for the evaluation to complete
 
@@ -214,9 +223,9 @@ finish successfully, or `Failed` if an error occurs.
 the job at regular intervals and displays benchmark progress until the job
 reaches a terminal state:
 
-[source,role="execute"]
+[source,role="execute",subs="specialcharacters,attributes"]
 ----
-evalhub eval status --watch <job_id>
+evalhub eval status --watch {job_id}
 ----
 
 Under the hood, EvalHub creates an isolated Kubernetes Job for each benchmark
@@ -224,7 +233,7 @@ in the tenant namespace — an adapter container runs the evaluation framework,
 and a sidecar proxy container forwards status events and results. You can see
 the underlying benchmark jobs from the CLI:
 
-[source,role="execute"]
+[source,role="execute",subs="specialcharacters,attributes"]
 ----
 oc get jobs -n {project-namespace}
 ----
@@ -234,8 +243,9 @@ custom resource — so `evalhub eval status <job_id>` is the source of truth
 for job state. When the job completes, click the evaluation name in the
 evaluations list to view detailed results.
 
-== 2.3 — Analyze Evaluation Results
+== Exercise 3: Analyze evaluation results
 
+Now that the evaluation run has completed, you will analyze its results.
 The results object contains benchmark scores, metrics, and pass/fail
 outcomes. If pass criteria are configured, the results include a `test` field
 with the overall score, the threshold, and the pass/fail status.
@@ -245,9 +255,9 @@ results, including benchmark scores and the pass or fail status if you
 configured a threshold. Retrieve formatted results from the terminal with
 the `evalhub` CLI:
 
-[source,role="execute"]
+[source,role="execute",subs="specialcharacters,attributes"]
 ----
-evalhub eval results <job_id> --format table
+evalhub eval results {job_id} --format table
 ----
 
 ----
@@ -319,14 +329,14 @@ quality gate before exposing the model as a Model-as-a-Service in Module 3.
 . *Compare against a baseline run.* The run you just completed becomes the
 baseline. After any change — a new model version, different runtime
 arguments, a different serving configuration — re-run the same evaluation and
-compare the two runs side by side (section 2.4).
+compare the two runs side by side (Exercise 4).
 . *Check each benchmark's metric direction.* The comparison view does not
 indicate whether a higher or lower metric value is better, so you must
 interpret metric changes based on your knowledge of each benchmark. Use
 `evalhub providers describe <provider>` to review each benchmark's category
 and metrics.
 
-== 2.4 — Configure a Repeatable Evaluation Workflow
+== Exercise 4: Configure a repeatable evaluation workflow
 
 A one-off benchmark is a data point; a repeatable evaluation workflow is a
 baseline. This section turns the evaluation you ran into a workflow you can
@@ -339,7 +349,7 @@ file, which captures the model endpoint, the benchmarks, and the MLflow
 experiment. Save it alongside your project so it can be versioned and
 re-run:
 
-[source,yaml]
+[source,yaml,subs="specialcharacters,attributes"]
 ----
 # evaljob.yaml — repeatable evaluation configuration
 name: {model-name}-baseline
@@ -443,11 +453,25 @@ evaluation *Endpoint URL* directly at the model's internal cluster endpoint
 (as configured in this module) instead of through the gateway.
 ====
 
-== Key Takeaways
+== Module summary
+
+**What you accomplished:**
+
+* Explored EvalHub — its providers, benchmarks, collections, and pass criteria.
+* Ran a benchmark evaluation against the deployed model from the dashboard and the CLI.
+* Analyzed the evaluation results and configured a repeatable evaluation workflow.
+
+**Key takeaways:**
 
 * EvalHub provides a structured way to benchmark and evaluate model inference performance directly within Red Hat AI Enterprise.
 * Evaluation results surface latency, throughput, and quality metrics that inform serving decisions.
 * A repeatable evaluation workflow enables teams to track model performance as configurations or models change.
+
+**Next steps:**
+
+With a measured quality baseline in hand, continue to
+xref:module-03-model-as-a-service.adoc[Module 3] to expose the model as a
+shared Model-as-a-Service.
 
 '''
 

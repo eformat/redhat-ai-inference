@@ -31,7 +31,7 @@ By the end of this module you will be able to:
 * Configure a deployed model as a Model-as-a-Service for shared, scalable consumption
 * Manage access controls and API endpoint configuration for the model service
 
-== 3.1 — Review the Model-as-a-Service Approach
+== Exercise 1: Review the Model-as-a-Service approach
 
 .3 minutes
 
@@ -103,9 +103,12 @@ The image in this section is a placeholder — the MaaS governance-layer diagram
 the Act phase.
 ====
 
-== 3.2 — Configure the Model as a Shared Service
+== Exercise 2: Configure the model as a shared service
 
 .7 minutes
+
+Now that you have reviewed the MaaS governance layer, you will publish the
+model to the shared gateway.
 
 The model you deployed in Module 1 — `nemotron-3-nano-30b-a3b`, serving on the
 NVIDIA L40S GPU node in your project — was deployed as an
@@ -143,7 +146,7 @@ Review the serving configuration for the deployed model:
 Publishing registers the model with MaaS through a `MaaSModelRef` in the
 model's project namespace:
 
-[source,yaml]
+[source,yaml,subs="specialcharacters,attributes"]
 ----
 apiVersion: maas.opendatahub.io/v1alpha1
 kind: MaaSModelRef
@@ -167,12 +170,15 @@ automatically.
 
 Verify the model is registered with MaaS:
 
-[source,bash,role="execute"]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
 oc get maasmodelref -n {project-namespace}
 ----
 
-You should see a `MaaSModelRef` object for your deployed model.
+The output lists a `MaaSModelRef` named `nemotron-3-nano-30b-a3b` — the
+model is registered with MaaS. Its `RuntimeReady`, `GovernanceAttached`, and
+`Ready` conditions report `True` once registration completes; Exercise 4
+checks them explicitly.
 
 The model also appears on the shared service surface consumers use:
 
@@ -189,9 +195,12 @@ as a Service* badge and your subscription assignment.
 
 image::302-ai-asset-endpoints.png[AI asset endpoints page with the model showing Ready status and View in the Endpoints column,link=self,window=blank,width=700]
 
-== 3.3 — Configure Access Controls and API Endpoints
+== Exercise 3: Configure access controls and API endpoints
 
 .5 minutes
+
+Now that the model is published to the shared gateway, you will configure
+who can consume it and with which credentials.
 
 Access to the model service is governed by subscription tiers. This environment
 has two tiers, each backed by OpenShift owner groups:
@@ -220,7 +229,7 @@ Each tier is provisioned as a `MaaSSubscription` and a matching
 `MaaSAuthPolicy` in the `models-as-a-service` namespace — the only namespace
 the MaaS API reads subscriptions from. Review the free-tier pair:
 
-[source,yaml]
+[source,yaml,subs="specialcharacters,attributes"]
 ----
 apiVersion: maas.opendatahub.io/v1alpha1
 kind: MaaSSubscription
@@ -245,7 +254,7 @@ spec:
 A matching `MaaSAuthPolicy` binds API-key authentication to the published model
 at the gateway:
 
-[source,yaml]
+[source,yaml,subs="specialcharacters,attributes"]
 ----
 apiVersion: maas.opendatahub.io/v1alpha1
 kind: MaaSAuthPolicy
@@ -319,7 +328,7 @@ it, you must revoke the key and create a new one.
 . Click *Close*. The new key appears in the table with *Status* = *Active* and
 the *Expires* date you selected.
 
-image::304-api-key-create.png[Create API key dialog with name, subscription, and 30-day expiration selected,link=self,window=blank,width=700]
+image::304-api-key-create.png[Create API key dialog with the name, subscription, and 30-day expiration selected,link=self,window=blank,width=700]
 
 image::305-api-key-created.png[API key created dialog showing the one-time key display,link=self,window=blank,width=700]
 
@@ -352,9 +361,12 @@ associations — revoke the existing key and create a new one to reflect updated
 groups.
 ====
 
-== 3.4 — Configure Scaling Policies
+== Exercise 4: Configure scaling policies
 
 .5 minutes
+
+Now that you hold a working API key, you will scale the service and confirm
+it is ready for concurrent consumers.
 
 Module 1 deployed the model with a single replica — the deployment wizard
 default. One replica serves light, single-team traffic, but a shared endpoint
@@ -364,7 +376,7 @@ requests.
 
 Scale the model to two replicas:
 
-[source,bash,role="execute"]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
 oc patch llminferenceservice nemotron-3-nano-30b-a3b -n {project-namespace} --type merge \
   -p '{"spec":{"replicas":2}}'
@@ -372,7 +384,7 @@ oc patch llminferenceservice nemotron-3-nano-30b-a3b -n {project-namespace} --ty
 
 Wait for the second model pod to come up:
 
-[source,bash,role="execute"]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
 oc get pods -n {project-namespace} -w
 ----
@@ -399,7 +411,7 @@ subscription limit does not throttle the test.
 Before testing the endpoint, confirm the model finished MaaS governance
 pairing — the `MaaSModelRef` status conditions must all report `True`:
 
-[source,bash,role="execute"]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
 oc get maasmodelref nemotron-3-nano-30b-a3b -n {project-namespace} -o json \
   | jq -r '.status.conditions[] | "\(.type)=\(.status)"'
@@ -415,18 +427,18 @@ ModelIdentityUnique=True
 ----
 
 `GovernanceAttached` confirms the subscription and authorization policy
-pairing from section 3.3 is active, `RuntimeReady` confirms the model serving
+pairing from Exercise 3 is active, `RuntimeReady` confirms the model serving
 runtime is up, and `Ready=True` reports the model phase is `Ready` — the model
 is serving through the MaaS gateway.
 
 Verify the endpoint is externally reachable. Set the values you recorded in
-section 3.3 as environment variables (run these in the same terminal session so
+Exercise 3 as environment variables (run these in the same terminal session so
 the variables remain available):
 
-[source,bash,role="execute"]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-export MAAS_URL="<the external API endpoint URL copied from the Endpoints dialog>"
-export MAAS_API_KEY="<the sk-oai- API key you copied>"
+export MAAS_URL="{maas_url}"
+export MAAS_API_KEY="{maas_api_key}"
 curl -s "${MAAS_URL}/v1/models" -H "Authorization: Bearer ${MAAS_API_KEY}" | jq .
 ----
 
@@ -512,12 +524,26 @@ limit (RHOAIENG-99765), so large payloads routed through the gateway — long
 prompts, batched requests, or attached files — must stay below roughly 3.8 MB.
 ====
 
-== Key takeaways
+== Module summary
+
+**What you accomplished:**
+
+* Reviewed the Model-as-a-Service approach and how it differs from direct deployment.
+* Configured the model as a shared service published through the MaaS gateway.
+* Configured access controls and API endpoints, and scaled the model for concurrent consumers.
+
+**Key takeaways:**
 
 * Model-as-a-Service transforms a single-team model deployment into a shared, scalable resource available across the organization.
 * Access controls and API credentials govern who can consume the model service.
 * Scaling policies ensure the service can handle concurrent requests from multiple consumers.
 * The endpoint URL and API key you recorded here are the handoff to Module 4 — reuse them there without re-deriving.
+
+**Next steps:**
+
+The endpoint URL and API key you recorded are ready to be consumed:
+continue to xref:module-04-integrate-application.adoc[Module 4] to connect
+the sample application to the endpoint.
 
 '''
 

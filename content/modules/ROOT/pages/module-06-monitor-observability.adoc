@@ -42,7 +42,7 @@ MaaS per-subscription token telemetry and vLLM engine metrics collected
 through user workload monitoring — and note baselines for latency,
 throughput, and error rate before generating load.
 
-== 6.1 — Explore the observability dashboard
+== Exercise 1: Explore the observability dashboard
 
 The observability dashboard is part of the OpenShift AI dashboard, backed by
 the platform's observability stack: the Cluster Observability Operator
@@ -60,18 +60,16 @@ image::601-dashboards-nav.png[OpenShift AI left navigation with Observe & monito
 The default view is the *Dashboard* tab. This shows the health, performance,
 and resource usage of AI workloads, highlighting basic GPU usage up front:
 
-* *Platform health* — overall serving platform status; the reference capture
-shows 100% health
+* *Platform health* — overall serving platform status; for example, a healthy
+deployment shows 100% health
 * *Deployed models* — the count of models serving on the cluster; one model
 is deployed in this workshop
 * *Resource charts* — GPU, CPU, memory, and inbound traffic over the selected
-time window (the reference capture covers the last 30 minutes)
+time window (for example, the last 30 minutes)
 * *Latency chips* — time to first token (TTFT) and response latency at a
 glance
 
-image::602-cluster-dashboard.png[Dashboard tab showing platform health, deployed models, resource charts, and latency chips,link=self,window=blank,width=700]
-
-// Live capture in Act phase: annotated Dashboard tab screenshot with callouts on health, model count, resource charts, and the GPU utilization spike.
+// TODO(wrong-capture): 602-cluster-dashboard.png shows an "Unable to reach observability dashboards" error — not the Dashboard tab content. Re-capture the Dashboard tab (platform health, deployed models, resource charts, latency chips) during the Act phase.
 
 The dashboard also surfaces the model serving metrics you review throughout
 this module:
@@ -83,7 +81,7 @@ this module:
 * Resource utilization (CPU, memory, GPU)
 
 MaaS usage analytics — the subscription-level token accounting this module
-focuses on in section 6.2 — live on this same *Dashboard* tab, the default
+focuses on in Exercise 2 — live on this same *Dashboard* tab, the default
 observability view in RHOAI 3.6; the second tab, *Infrastructure*, shows node
 and infrastructure metrics. (The dashboard also supports a Models tab in full
 deployments; your lab user has permissions to see the Dashboard and
@@ -95,9 +93,7 @@ RHOAI 3.6 renamed and reorganized the observability tabs: the former
 *Cluster* and *Usage* tabs are now *Dashboard* and *Infrastructure*.
 ====
 
-image::603-usage-dashboard.png[Dashboard tab showing the overview metric cards and token consumption table,link=self,window=blank,width=700]
-
-// Live capture in Act phase: annotated Dashboard tab screenshot with callouts on the overview metric cards and the Token Consumption by User table.
+// TODO(wrong-capture): 603-usage-dashboard.png shows the Infrastructure tab (accelerator utilization) — not the Dashboard tab with the overview metric cards and Token Consumption by User table. Re-capture the Dashboard tab with the usage analytics during the Act phase.
 
 [IMPORTANT]
 ====
@@ -117,12 +113,16 @@ utilization per model replica, with selectable time range and refresh
 interval.
 ====
 
-== 6.2 — Monitor key model serving metrics
+== Exercise 2: Monitor key model serving metrics
+
+Now that you have located the observability dashboard, you will review the
+model serving metrics it reports.
 
 The Dashboard tab reports five overview metrics for the selected time
-period, plus a per-user token consumption table. The reference capture (a
-6-hour window) shows 844K total tokens, 57 requests, 3 rate-limited, a 95%
-success rate, and 2 active users.
+period, plus a per-user token consumption table. For example, over a 6-hour
+window you might see roughly 844K total tokens, 57 requests, 3
+rate-limited, a 95% success rate, and 2 active users — your values depend on
+how much traffic the workshop cluster has seen.
 
 [cols="~,~"]
 |===
@@ -216,7 +216,7 @@ itself the signal that metrics collection is active.
 ====
 
 With traffic flowing from the application, record your baseline values for
-comparison in section 6.3:
+comparison in Exercise 3:
 
 * Baseline latency (p50, p95, p99) and TTFT from the dashboard chips
 * Baseline throughput — tokens served over the selected window
@@ -231,7 +231,7 @@ Limitador metrics endpoint directly rather than relying on the dashboard or
 its CSV export.
 ====
 
-== 6.3 — Generate load and observe metric changes
+== Exercise 3: Generate load and observe metric changes
 
 The application has been sending requests since Module 4 — that traffic is
 your baseline. Now generate a measurable spike through the same MaaS endpoint
@@ -243,10 +243,10 @@ so the subscription limit does not throttle the load run.
 Set the MaaS values as environment variables (reuse the terminal session from
 Module 3, or set them again), then export the model ID:
 
-[source,bash,role="execute"]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-export MAAS_URL="<the external API endpoint URL copied from the Endpoints dialog>"
-export MAAS_API_KEY="<the sk-oai- API key scoped to the premium subscription>"
+export MAAS_URL="{maas_url}"
+export MAAS_API_KEY="{maas_api_key}"
 export MODEL_ID=$(curl -s "${MAAS_URL}/v1/models" \
   -H "Authorization: Bearer ${MAAS_API_KEY}" \
   | jq -r '[.data[] | select(.ready==true)][0].id')
@@ -291,8 +291,8 @@ Slowest response  : 4.213s
 The values above are examples — your numbers depend on cluster load, prompt
 length, and the model. HTTP 429 responses mean the subscription's token limit
 was hit during the burst — the rate limiting you configured in Module 3
-working as intended. The reference capture shows 3 rate-limited requests out
-of 57 in a 6-hour window.
+working as intended. For example, a 6-hour window might show 3 rate-limited
+requests out of 57.
 ====
 
 While the loop runs, watch the dashboards:
@@ -301,10 +301,11 @@ While the loop runs, watch the dashboards:
 . Filter by your username and set the time window to *Last 5 minutes*.
 . Refresh the dashboard data with the dedicated refresh button.
 
-You should see the load reflected within 15–30 seconds:
+The load appears on the dashboard within 15–30 seconds (the scrape interval
+adds a short delay):
 
-* *GPU utilization* climbs while the burst is in flight — the reference
-capture shows a GPU spike at 17:38 under load
+* *GPU utilization* climbs while the burst is in flight — for example, a
+visible GPU spike at the burst's timestamp under load
 * *Request rate* rises with the burst volume
 * *Latency and TTFT chips* drift upward as concurrent requests queue behind
 each other on the GPU
@@ -336,7 +337,7 @@ rate limits do not depend on this interval; only the visibility into
 consumption trails it by this small amount.
 ====
 
-== 6.4 — Analyze performance trends
+== Exercise 4: Analyze performance trends
 
 With a baseline and a load spike recorded, analyze the relationship between
 request rate, latency, and resource utilization:
@@ -357,8 +358,8 @@ baseline? Serving metrics are the evidence for that decision.
 
 Filter the usage analytics on the Dashboard tab to sharpen the analysis:
 
-* *User* — search for your username (for example, `llmuser-hv6w7` in the
-reference capture) to isolate your own usage across Modules 3–6
+* *User* — search for your username (for example, `lab-user`) to isolate
+your own usage across Modules 3–6
 * *Subscription* — switch to the other workshop subscription to see how usage
 separates per tier
 * *Model* — only one model is deployed in this workshop, so this filter is
@@ -391,12 +392,26 @@ observed under load.
 inefficient prompting, or peak adoption periods; schedule resources
 accordingly.
 
-== Key takeaways
+== Module summary
+
+**What you accomplished:**
+
+* Explored the observability dashboard and the metric pipelines behind it.
+* Monitored the key model serving metrics and recorded a baseline.
+* Generated load against the MaaS endpoint and analyzed performance trends.
+
+**Key takeaways:**
 
 * The observability dashboard provides real-time visibility into model serving behavior — latency, throughput, error rate, and resource utilization.
 * Monitoring under load reveals how the model service responds to increased demand and where performance thresholds exist.
 * Usage metrics attribute consumption to users and subscriptions — the data behind capacity planning, cost attribution, and showback reporting.
 * Serving metrics inform operational decisions: scaling policies, capacity planning, and alerting thresholds.
+
+**Next steps:**
+
+You have taken a model from an empty cluster to a monitored
+Model-as-a-Service endpoint: continue to xref:conclusion.adoc[the
+conclusion] to review the workshop and clean up your resources.
 
 '''
 

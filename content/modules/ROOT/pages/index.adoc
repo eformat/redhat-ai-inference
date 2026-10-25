@@ -14,7 +14,7 @@ Model-as-a-Service exposure, application integration, and observability.
 AI engineers, platform engineers, and AI operations teams with basic
 OpenShift/Kubernetes knowledge and familiarity with AI model concepts.
 
-== What You Will Do
+== What you will do
 
 [cols="1,4,1", options="header"]
 |===
