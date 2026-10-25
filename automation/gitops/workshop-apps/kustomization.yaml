@@ -1,0 +1,23 @@
+# Workshop-level YAML for the redhat-ai-inference lab that is NOT under the
+# rhoai-cluster-pool GitOps control. Platform-level resources (DSCI/DSC, MaaS
+# gateway, RHOAI operators) belong to the pool overlay; everything here is
+# workshop/lab-scoped and applied manually with `oc apply -k`.
+#
+# Each file is annotated with the module / screenshot it unblocks.
+# NOTE: no global `namespace:` field — namespaces are explicit per resource.
+# The global namespace transformer renames Namespace-kind objects (ID conflict
+# with openshift-devspaces from devspaces.yaml) and would also rewrite the
+# devspaces OLM objects into lab-user-dev. Keep namespaces explicit in any
+# file added here (e.g. observability.yaml from the Module 6 task).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace-labels.yaml
+  - model-serviceaccount.yaml
+  - maas-chat-client.yaml
+  # TEMPLATED — substitute a freshly minted MaaS API key before enabling (see README.md):
+  # - maas-credentials-secret.yaml
+  # Added by the Dev Spaces task (Module 4 screenshots):
+  - devspaces.yaml
+  # Added by the observability task (Module 6 screenshots):
+  - observability.yaml

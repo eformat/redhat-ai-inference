@@ -55,7 +55,7 @@ and launch *Red Hat OpenShift AI* from the application menu, as in Module 1.
 
 image::601-dashboards-nav.png[OpenShift AI left navigation with Observe & monitor and Dashboard selected,link=self,window=blank,width=700]
 
-// Live capture in Act phase: screenshot of the OpenShift AI left navigation with Observe & monitor → Dashboard selected, TTFT and latency chips visible.
+// Live capture 2026-10-25: OpenShift AI left navigation with Observe & monitor expanded and Dashboard selected, the Dashboard page loading live data (System health, Deployed models, GPU utilization, Request success rate).
 
 The default view is the *Dashboard* tab. This shows the health, performance,
 and resource usage of AI workloads, highlighting basic GPU usage up front:
@@ -69,7 +69,7 @@ time window (for example, the last 30 minutes)
 * *Latency chips* — time to first token (TTFT) and response latency at a
 glance
 
-// TODO(wrong-capture): 602-cluster-dashboard.png shows an "Unable to reach observability dashboards" error — not the Dashboard tab content. Re-capture the Dashboard tab (platform health, deployed models, resource charts, latency chips) during the Act phase.
+// The former 602-cluster-dashboard.png wrong capture (observability error state) was removed — the observability stack was repaired on the QA cluster 2026-10-25 and the Dashboard content is shown in 601-dashboards-nav.png and 605-load-metrics.png.
 
 The dashboard also surfaces the model serving metrics you review throughout
 this module:
@@ -93,7 +93,7 @@ RHOAI 3.6 renamed and reorganized the observability tabs: the former
 *Cluster* and *Usage* tabs are now *Dashboard* and *Infrastructure*.
 ====
 
-// TODO(wrong-capture): 603-usage-dashboard.png shows the Infrastructure tab (accelerator utilization) — not the Dashboard tab with the overview metric cards and Token Consumption by User table. Re-capture the Dashboard tab with the usage analytics during the Act phase.
+// The former 603-usage-dashboard.png wrong capture (Infrastructure tab) was removed — the usage analytics with the Token Consumption by User table are shown in 604-token-consumption-table.png and 606-usage-filtered.png.
 
 [IMPORTANT]
 ====

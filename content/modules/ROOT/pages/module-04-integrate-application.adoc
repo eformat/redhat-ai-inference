@@ -62,8 +62,7 @@ image::402-workspace-trust.png[VS Code workspace with the Trust the authors prom
 [NOTE]
 ====
 If your workspace shows a warning that it failed to start, it was idled to
-free resources — clicking *Open* again restarts it. Image references in this
-module are placeholders, captured live during the Act phase.
+free resources — clicking *Open* again restarts it.
 ====
 
 From the file explorer, open the `maas-chat-client` directory in the cloned
@@ -480,6 +479,16 @@ choose *Explain*, or ask directly: `Explain what this code does`.
 and token accounting as the application's requests.
 
 image::406-copilot-chat-inference.png[VS Code chat panel returning a response from the MaaS endpoint,link=self,window=blank,width=700]
+
+[NOTE]
+====
+[env] This capture is pending a platform change: the MaaS gateway's payload
+processing passes the whole conversation (system messages included) into the
+NeMo guardrails' forbidden-word scan, and the VS Code chat system prompt
+always contains scanned terms — so every editor chat request is blocked with
+403 regardless of the key. Scope the guards off the model path or ship input
+rails that scan only the last user message, then re-capture this image.
+====
 
 Switching the chat to *Agent* mode unlocks file-editing actions: the
 `toolCalling: true` setting you configured in Exercise 2 is what lets the

@@ -96,13 +96,6 @@ verify API names against your installed version.
 
 image::301-maas-governance-layer.png[MaaS governance-layer diagram showing the API gateway between consumers and models,link=self,window=blank,width=700]
 
-[NOTE]
-====
-The image in this section is a placeholder — the MaaS governance-layer diagram
-(showing the API gateway between consumers and models) is captured live during
-the Act phase.
-====
-
 == Exercise 2: Configure the model as a shared service
 
 .7 minutes

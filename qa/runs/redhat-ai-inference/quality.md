@@ -88,3 +88,102 @@ evaluation service using the TrustyAI Operator" (Project: lab-user-dev).
   `opendatahub.io/dashboard=true` namespace label, fixed at the source in
   `e2e.yml` M1.
 - Gates after the updates: antora 0 errors, ph-check.py All checks PASSED.
+
+---
+
+# Screenshot completion run (2026-10-25, 4-subagent parallel execution)
+
+All 20 gray placeholders in modules 3–6 replaced with real 1600x900 PNGs
+(19 subagent-captured + 2 duplicate fixes re-captured in the main session).
+Environment unblocked where possible; 406 is the only scoped shot that stays
+a placeholder (platform blocker, sealed note in module-04).
+
+## Per-module status
+
+- **M3 (4/4)**: 301 governance-layer diagram (arch-diagram-svg), 303
+  subscription tiers (live, real MaaSSubscription 50,000/1m), 305 one-time
+  API key dialog (live, key masked), 306 inference test (terminal mock from
+  real output — no browser terminal on prelude2).
+- **M4 (5/6)**: Dev Spaces installed via
+  `automation/gitops/workshop-apps/devspaces.yaml` (CSV
+  devspacesoperator.v3.30.2, AllNamespaces). 401 dashboard + workshop
+  workspace Running, 402 genuine trust modal, 403 chatLanguageModels.json
+  (apiKey as ${input:...} reference — no key material), 404 Deployment 1/1
+  Running, 405 Dev Spaces terminal response + token usage. **406 blocked
+  (platform)**: MaaS gateway payload processing feeds the whole conversation
+  into the NeMo guardrails forbidden-word scan; the VS Code chat system
+  prompt always contains scanned terms -> every editor chat request 403
+  regardless of key. Verified by curl (plain message 200; message with
+  "harmful" in a system prompt 403). Needs guardrail scoping off the model
+  path or input rails on the last user message only.
+- **M5 (6/6)**: 501 serving-chain diagram, 502/503/504 real console Logs
+  views (client completions + tokens; gateway istio-proxy 200s; model server
+  engine throughput), 505 real revoke dialog (throwaway key revoked through
+  the dialog flow), 506 genuine ext_proc_error line
+  (received_message_larger_than_max 4500128 vs 4194304) after a 4.5MB probe.
+- **M6 (4/4)**: observability stack revived in 3 layers — (1) missing
+  OperatorHub operators (opentelemetry-product, cluster-observability-operator,
+  tempo-product Subscriptions in redhat-ods-operator) fixed DSCI
+  MonitoringDependenciesReady=False; (2) /perses proxy workaround (upstream
+  odh-dashboard bug: EA2 dashboard-operator cannot apply the rhods-dashboard
+  Deployment — invalid value+valueFrom env — DSC DashboardReady=Error
+  persists; ConfigMap workaround converges with upstream fix); (3) new
+  NetworkPolicy perses-operator access + PersesDatasource mirror. 601 nav,
+  604 token table (2 real rows, ~400 completions traffic), 605 GPU 93%
+  during 3-worker load, 606 filtered by user+subscription.
+
+## Dup fixes (byte-identical copies re-captured)
+
+- 101-rhoai-dashboard.png (was identical to 001) — re-captured with the left
+  navigation pane expanded per its alt text; no longer a copy of 001.
+- 101-deployment-status.png (was identical to 302) — re-captured fresh from
+  the AI asset endpoints page with Ready status.
+
+## automation/gitops/workshop-apps/ (NEW — workshop-level YAML, not pool-controlled)
+
+kustomization (13 objects) + README + per-file module/shot annotations:
+namespace-labels, model-serviceaccount, maas-chat-client (code ConfigMap +
+Deployment mirrored from e2e), templated maas-credentials Secret, devspaces
+(Namespace/OperatorGroup/Subscription/CheCluster), observability.yaml
+(3-layer fix), NetworkPolicy, PersesDatasource. Builds clean with
+`oc kustomize`; secrets scan clean.
+
+## Pool repo (UNCOMMITTED proposal — Mike to commit)
+
+`applications/rhoai/overlay/prelude-nightly-36/monitoring-operators.yaml`
+(3 Subscriptions) + kustomization resource line. 3.6-only; applied live on
+prelude2 (user-approved).
+
+## Gates
+
+- `npx antora site.yml`: 0 errors, 39 PNGs in build output
+- `ph-check.py` intake + review: All checks PASSED
+- Secrets scan over changed files (password/AKIA/sk-oai-<material>): clean
+- Only remaining placeholders: 203/204 (M2 EvalHub — platform operator build)
+  and 406 (guardrails scoping — platform), all with sealed notes in the adoc
+
+## For Mike (decisions/items)
+
+1. antora.yml `ssh_user: 'lab-user'` + `ssh_password` are docs placeholders —
+   the QA cluster has no lab-user IdP (realm user is prelude). Reconcile for
+   the real workshop env or keep as scaffold values.
+2. Docs drift (not changed): module-03 tier table (20,000/1m + 1,000/1s,
+   priority 10/20) vs live MaaSSubscription (50,000/1m, no priority);
+   module-05 gateway deployment name (`-openshift-default`, not `-istio`);
+   module-05 504 expected-output block (this vLLM build emits no per-request
+   log lines); module-05 502 (client prints completions + tokens, not POST
+   lines); Nemotron reasoning model needs max_tokens >= 1000 (docs example
+   100 can return content: null).
+3. Module client bug: `maas_chat_client.py` hardcodes max_tokens=256 ->
+   reasoning model flakiness (content None -> AttributeError crash loop).
+   Recommend >=1000 in module-04 source, e2e.yml, and the workshop-apps
+   ConfigMap.
+4. Transient MaaS gateway warmup: first request on a fresh key can return
+   AUTH_FAILURE "Exception thrown while generating token" — worth a
+   troubleshooting bullet.
+5. maas-chat-client/ repo dir added (module-04 Exercise 1 says it ships the
+   cloned repo) — keep-or-remove at commit time.
+6. 3.6.0-ea.2 operator bugs: dashboard-operator can never apply the
+   rhods-dashboard Deployment (upstream fixed, needs newer build);
+   data-science-tempo-traces dashboard 400s (bad panel schema, cosmetic).
+

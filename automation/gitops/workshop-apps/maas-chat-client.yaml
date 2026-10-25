@@ -1,0 +1,123 @@
+# Module 4 — maas-chat-client app (code ConfigMap + Deployment),
+# mirrored from qa-automation/e2e.yml M4.
+# NOTE: intentionally does NOT include the maas-credentials Secret —
+# the MaaS API key is minted per session (1h expiry). See README.md.
+apiVersion: v1
+kind: List
+items:
+- apiVersion: v1
+  data:
+    maas_chat_client.py: "#!/usr/bin/env python3\n\"\"\"A minimal chat client for\
+      \ the Model-as-a-Service endpoint from Module 3.\"\"\"\nimport json, os, sys,\
+      \ time\nimport urllib.error\nimport urllib.request\n\nAPI_URL = os.environ.get(\"\
+      MAAS_URL\", \"\").rstrip(\"/\")\nAPI_KEY = os.environ.get(\"MAAS_API_KEY\",\
+      \ \"\")\nMODEL = os.environ.get(\"MAAS_MODEL\", \"\")\nPROMPT = os.environ.get(\"\
+      MAAS_PROMPT\", \"Explain Model-as-a-Service in one sentence.\")\nINTERVAL =\
+      \ int(os.environ.get(\"MAAS_INTERVAL\", \"0\"))\nSYSTEM = \"You are a concise\
+      \ assistant.\"\n\ndef chat_completions(model, messages, max_tokens=256):\n \
+      \   \"\"\"POST one Chat Completions request and return the parsed response.\"\
+      \"\"\n    payload = json.dumps({\"model\": model, \"messages\": messages, \"\
+      max_tokens\": max_tokens}).encode(\"utf-8\")\n    request = urllib.request.Request(\n\
+      \        f\"{API_URL}/v1/chat/completions\", data=payload, method=\"POST\",\n\
+      \        headers={\"Authorization\": f\"Bearer {API_KEY}\", \"Content-Type\"\
+      : \"application/json\"})\n    with urllib.request.urlopen(request, timeout=120)\
+      \ as response:\n        return json.loads(response.read().decode(\"utf-8\"))\n\
+      \ndef discover_model():\n    \"\"\"Return the first ready model ID from the\
+      \ /v1/models catalog.\"\"\"\n    request = urllib.request.Request(f\"{API_URL}/v1/models\"\
+      , headers={\"Authorization\": f\"Bearer {API_KEY}\"})\n    with urllib.request.urlopen(request,\
+      \ timeout=30) as response:\n        catalog = json.loads(response.read().decode(\"\
+      utf-8\"))\n    ready = [m for m in catalog.get(\"data\", []) if m.get(\"ready\"\
+      , True)]\n    if not ready:\n        raise RuntimeError(\"no ready models in\
+      \ the catalog \u2014 check Module 3\")\n    return ready[0][\"id\"]\n\ndef print_completion(completion):\n\
+      \    \"\"\"Print one completion and its token usage.\"\"\"\n    choice = completion[\"\
+      choices\"][0]\n    usage = completion.get(\"usage\", {})\n    print(f\"assistant>\
+      \ {choice['message']['content'].strip()}\")\n    print(f\"[tokens: {usage.get('prompt_tokens',\
+      \ '?')} in / {usage.get('completion_tokens', '?')} out]\")\n\ndef run_interactive(model):\n\
+      \    \"\"\"Chat loop: read prompts from the terminal until you type quit.\"\"\
+      \"\n    print(\"Chat client ready. Type a prompt, or 'quit' to exit.\")\n  \
+      \  history = []\n    while True:\n        try:\n            user_input = input(\"\
+      you> \").strip()\n        except (EOFError, KeyboardInterrupt):\n          \
+      \  break\n        if not user_input or user_input.lower() in (\"quit\", \"exit\"\
+      ):\n            break\n        messages = [{\"role\": \"system\", \"content\"\
+      : SYSTEM}] + history + [{\"role\": \"user\", \"content\": user_input}]\n   \
+      \     try:\n            completion = chat_completions(model, messages)\n   \
+      \     except urllib.error.HTTPError as exc:\n            print(f\"HTTP {exc.code}:\
+      \ {exc.reason} \u2014 check your endpoint URL and API key\")\n            continue\n\
+      \        except urllib.error.URLError as exc:\n            print(f\"endpoint\
+      \ unreachable: {exc}\")\n            continue\n        print_completion(completion)\n\
+      \        history += [{\"role\": \"user\", \"content\": user_input},\n      \
+      \              {\"role\": \"assistant\", \"content\": completion[\"choices\"\
+      ][0][\"message\"][\"content\"]}]\n    print(\"Bye!\")\n\ndef run_request_loop(model):\n\
+      \    \"\"\"Deployed mode: send PROMPT every INTERVAL seconds and log results.\"\
+      \"\"\n    print(f\"Request loop started \u2014 one completion every {INTERVAL}s.\"\
+      )\n    while True:\n        messages = [{\"role\": \"system\", \"content\":\
+      \ SYSTEM}, {\"role\": \"user\", \"content\": PROMPT}]\n        try:\n      \
+      \      completion = chat_completions(model, messages)\n            print_completion(completion)\n\
+      \        except urllib.error.HTTPError as exc:\n            print(f\"HTTP {exc.code}:\
+      \ {exc.reason} \u2014 check your endpoint URL and API key\")\n        except\
+      \ urllib.error.URLError as exc:\n            print(f\"endpoint unreachable:\
+      \ {exc}\")\n        time.sleep(INTERVAL)\n\ndef main():\n    if not API_URL\
+      \ or not API_KEY:\n        sys.exit(\"Set MAAS_URL and MAAS_API_KEY before starting\
+      \ the client.\")\n    model = MODEL or discover_model()\n    print(f\"Using\
+      \ model: {model}\")\n    if INTERVAL > 0:\n        run_request_loop(model)\n\
+      \    else:\n        run_interactive(model)\n\nif __name__ == \"__main__\":\n\
+      \    main()\n"
+  kind: ConfigMap
+  metadata:
+    name: maas-chat-client
+    namespace: lab-user-dev
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: maas-chat-client
+    namespace: lab-user-dev
+  spec:
+    progressDeadlineSeconds: 600
+    replicas: 1
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app: maas-chat-client
+    strategy:
+      rollingUpdate:
+        maxSurge: 25%
+        maxUnavailable: 25%
+      type: RollingUpdate
+    template:
+      metadata:
+        labels:
+          app: maas-chat-client
+      spec:
+        containers:
+        - command:
+          - /bin/bash
+          - -c
+          - python3 /opt/client/maas_chat_client.py
+          env:
+          - name: MAAS_PROMPT
+            value: Explain Model-as-a-Service in one sentence.
+          - name: MAAS_INTERVAL
+            value: '30'
+          envFrom:
+          - secretRef:
+              name: maas-credentials
+          image: registry.access.redhat.com/ubi9/python-311:latest
+          imagePullPolicy: Always
+          name: chat-client
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /opt/client
+            name: client-code
+            readOnly: true
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+        volumes:
+        - configMap:
+            defaultMode: 420
+            name: maas-chat-client
+          name: client-code

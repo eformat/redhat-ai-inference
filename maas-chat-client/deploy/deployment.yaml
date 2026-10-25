@@ -1,0 +1,38 @@
+# Module 4 — maas-chat-client Deployment (mirrors the module's
+# deploy/deployment.yaml manifest; callout markers are comments).
+# The ConfigMap maas-chat-client is created from this directory with
+# `oc create configmap maas-chat-client --from-file=maas_chat_client.py`.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: maas-chat-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: maas-chat-client
+  template:
+    metadata:
+      labels:
+        app: maas-chat-client
+    spec:
+      containers:
+        - name: chat-client
+          image: registry.access.redhat.com/ubi9/python-311:latest
+          command: ["/bin/bash", "-c", "python3 /opt/client/maas_chat_client.py"] # <1>
+          envFrom:
+            - secretRef:
+                name: maas-credentials # <2>
+          env:
+            - name: MAAS_PROMPT
+              value: "Explain Model-as-a-Service in one sentence." # <3>
+            - name: MAAS_INTERVAL
+              value: "30"
+          volumeMounts:
+            - name: client-code
+              mountPath: /opt/client # <4>
+              readOnly: true
+      volumes:
+        - name: client-code
+          configMap:
+            name: maas-chat-client # <5>

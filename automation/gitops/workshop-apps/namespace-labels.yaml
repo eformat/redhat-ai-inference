@@ -1,0 +1,11 @@
+# Module 1/4 — the lab project MUST carry opendatahub.io/dashboard=true or it is
+# invisible in the RHOAI projects UI (root cause of the 2026-10-25 cluster-drift gap).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-user-dev
+  labels:
+    opendatahub.io/dashboard: "true"
+    kubernetes.io/metadata.name: lab-user-dev
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/warn: baseline
