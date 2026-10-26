@@ -133,9 +133,13 @@ rules:
   # OpenShift gates spec.host on a Route behind the routes/custom-host
   # subresource — plain routes/create gives "Forbidden: you do not have
   # permission to set the host field of the route" (hit by the hook Job).
+  # NOTE: no resourceNames here — the RouteHost admission plugin authorizes
+  # create routes/custom-host WITHOUT a resourceName (SAR-verified: named SAR
+  # allowed, unnamed SAR denied with resourceNames set), so RBAC cannot scope
+  # this grant to a single route. Acceptable: the ClusterRole binds only the
+  # workshop's maas-gateway-setup hook SA.
   - apiGroups: ["route.openshift.io"]
     resources: ["routes/custom-host"]
-    resourceNames: ["maas-gateway-route"]
     verbs: ["create", "patch", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
