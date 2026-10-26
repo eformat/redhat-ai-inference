@@ -9,6 +9,6 @@ asciidoc:
     experimental: true
     page-pagination: true
     guid: '%GUID%'
-    ssh_user: 'lab-user'
-    ssh_password: 'password'
-    openshift_console_url: 'https://console-openshift-console.apps.cluster.example.com'
+    user: 'lab-user1'
+    password: "%password%"
+    openshift_console_url: https://console-openshift-console.apps.cluster.example.com

@@ -23,8 +23,8 @@ terminal with the lab credentials provided for your environment:
 
 [source,subs="attributes+"]
 ----
-Username: {ssh_user}
-Password: {ssh_password}
+Username: {user}
+Password: {password}
 ----
 
 These credentials are scoped to your lab environment — do not share them.
