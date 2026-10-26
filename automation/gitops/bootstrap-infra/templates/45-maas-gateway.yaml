@@ -1,0 +1,236 @@
+---
+# MaaS default gateway (maas-default-gateway) — the shared MaaS Gateway the
+# maas-controller waits for (GatewayNotReady until it exists: "gateway
+# openshift-ingress/maas-default-gateway not found: the specified Gateway must
+# exist before enabling MaaS platform reconcile"). Without it the
+# default-tenant MaasTenantConfig never reconciles and neither maas-api nor
+# the praxis-extproc dataplane deploys.
+#
+# Shape mirrors the verified kitchen-sink maas overlay
+# (ralf-wiggum-rhoai-kitchen-sink cluster/overlays/maas/gateway/): no-LB
+# cluster (RHDP workshop) — the Service is LoadBalancer type (pending without
+# a cloud provider), and the status Job patches the Service status and
+# creates the external Route so the gateway controller sets
+# gateway.status.addresses (the maas-api reads it to discover its external
+# URL).
+#
+# PORTABLE ACROSS CLUSTERS: the apps domain is read LIVE from
+# ingress.config/cluster by the hook Job — the chart carries no
+# cluster-specific values, so the same chart works on any repo/cluster
+# (the kitchen-sink's make gateway-status precedent).
+#
+# Wave 2: after the DSC (wave 1) whose aigateway component creates the
+# data-science-gateway-class GatewayClass this Gateway reuses; before the
+# telemetry policy (wave 3) that targets this gateway.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: maas-default-gateway-config
+  namespace: openshift-ingress
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "2"
+data:
+  # Service parameters the gateway controller renders from the Gateway's
+  # infrastructure.parametersRef (data-science-gateway-class convention:
+  # <gateway-name>-config). LoadBalancer type so the Service takes an
+  # address once patched; pending on clusters without a cloud LB — the
+  # status Job below covers the external URL.
+  service: |
+    metadata:
+      annotations:
+        service.beta.openshift.io/serving-cert-secret-name: "maas-gw-service-tls"
+    spec:
+      type: LoadBalancer
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  # The MaaS controller hardcodes this name/namespace — do not rename.
+  name: maas-default-gateway
+  namespace: openshift-ingress
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "2"
+    opendatahub.io/managed: "false"
+    # Lets the ODH/Authorino stack bootstrap gateway TLS wiring automatically.
+    security.opendatahub.io/authorino-tls-bootstrap: "true"
+  labels:
+    app.kubernetes.io/name: maas
+    app.kubernetes.io/instance: maas-default-gateway
+    app.kubernetes.io/component: gateway
+    # Kuadrant/RHCL discovers the gateway for AuthPolicy/RateLimitPolicy
+    # attachment through this label.
+    kuadrant.io/gateway: "true"
+spec:
+  # Class created by the DSC aigateway component's GatewayConfig
+  # (default-gateway) — the same class data-science-gateway uses.
+  gatewayClassName: data-science-gateway-class
+  infrastructure:
+    parametersRef:
+      group: ""
+      kind: ConfigMap
+      name: maas-default-gateway-config
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      allowedRoutes:
+        # Models publish HTTPRoutes from any project namespace onto the
+        # shared MaaS gateway (module-03: publishing re-attaches the router
+        # here from the direct-serving gateway).
+        namespaces:
+          from: All
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: maas-gw-service-tls
+---
+# RBAC for the status Job: least privilege — resourceNames pin every rule to
+# exactly the objects the Job touches. The Job runs in the chart's MaaS
+# namespace (redhat-ods-applications) and reaches across into
+# openshift-ingress and the cluster-scoped Ingress, so the roles are
+# cluster-scoped. The routes create rule cannot carry a resourceNames
+# (create is type-wide); the Job only ever creates the fixed
+# maas-gateway-route name.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: maas-gateway-setup
+  namespace: redhat-ods-applications
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: maas-gateway-status
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+rules:
+  - apiGroups: [""]
+    resources: ["services", "services/status"]
+    resourceNames: ["maas-default-gateway-data-science-gateway-class"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways"]
+    resourceNames: ["maas-default-gateway"]
+    verbs: ["get"]
+  - apiGroups: ["config.openshift.io"]
+    resources: ["ingresses"]
+    resourceNames: ["cluster"]
+    verbs: ["get"]
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes"]
+    resourceNames: ["maas-gateway-route"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: maas-gateway-status
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: maas-gateway-status
+subjects:
+  - kind: ServiceAccount
+    name: maas-gateway-setup
+    namespace: redhat-ods-applications
+---
+# Patches the gateway Service STATUS with the external hostname and applies
+# the Route fronting it, so the gateway controller sets
+# gateway.status.addresses.
+#
+# WHY A JOB AND NOT A MANIFEST: (1) the Service status is an imperative
+# patch — on a cluster without a LoadBalancer provider the Service never
+# gets an external address, and the maas-api reads gateway.status.addresses
+# to discover its external URL (without it the dashboard API keys page shows
+# "maas-api is not available"). ArgoCD does not own .status, so selfHeal
+# never reverts the patch. (2) the Route host is cluster-specific — a static
+# chart Route would need a domain value in git; the Job reads the apps
+# domain live from ingress.config/cluster instead, so the chart is portable
+# across repos/clusters. ArgoCD does not track hook-created resources, so
+# there is no drift noise; BeforeHookCreation re-runs the Job on every sync,
+# and oc apply keeps the Route correct if the domain ever changes.
+#
+# SAME wave as the Gateway (kind order applies CRs before Jobs within a wave,
+# so the Gateway is applied first, then this Job patches the Service status
+# and the gateway controller reflects it into gateway.status.addresses).
+# Keeping this Job in a LATER wave deadlocks a fresh cluster: the sync waits
+# for the Gateway to become healthy before running the Job that patches it
+# (the catch-22 hit on m6lx9).
+#
+# Idempotent (same values); BeforeHookCreation re-runs on every sync.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: maas-gateway-status
+  namespace: redhat-ods-applications
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  backoffLimit: 20
+  template:
+    spec:
+      serviceAccountName: maas-gateway-setup
+      restartPolicy: OnFailure
+      containers:
+        - name: status
+          image: registry.redhat.io/openshift4/ose-cli:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+              # Apps domain read live from the cluster — the chart carries no
+              # cluster-specific values (portable across repos/clusters).
+              DOMAIN="$(oc get ingress.config cluster -o jsonpath='{.spec.domain}')"
+              HOST="maas.${DOMAIN}"
+              # The gateway Service is created by the gateway controller from
+              # the Gateway (same wave); its name derives from
+              # <gateway-name>-<gatewayclass-name>.
+              SVC=maas-default-gateway-data-science-gateway-class
+              until oc -n openshift-ingress get gateway maas-default-gateway >/dev/null 2>&1 \
+                  && oc -n openshift-ingress get svc "$SVC" >/dev/null 2>&1; do
+                echo "waiting for the gateway Service"; sleep 10
+              done
+              # Status-only patch — the Service gets the external hostname as
+              # its address; the gateway controller reflects it into
+              # gateway.status.addresses.
+              oc -n openshift-ingress patch svc "$SVC" --subresource=status --type=merge \
+                -p "{\"status\":{\"loadBalancer\":{\"ingress\":[{\"hostname\":\"${HOST}\"}]}}}"
+              echo "gateway Service status patched with ${HOST}"
+              # External Route fronting the gateway Service (created here, not
+              # in the chart: the host is cluster-specific). oc apply is
+              # idempotent and updates the host if the domain ever changes.
+              cat <<ROUTE | oc -n openshift-ingress apply -f -
+              apiVersion: route.openshift.io/v1
+              kind: Route
+              metadata:
+                name: maas-gateway-route
+                labels:
+                  gateway.networking.k8s.io/gateway-name: maas-default-gateway
+              spec:
+                host: "${HOST}"
+                to:
+                  kind: Service
+                  name: ${SVC}
+                  weight: 100
+                port:
+                  targetPort: https
+                tls:
+                  termination: reencrypt
+                  insecureEdgeTerminationPolicy: Redirect
+              ROUTE
+              echo "Route maas-gateway-route applied with host ${HOST}"
