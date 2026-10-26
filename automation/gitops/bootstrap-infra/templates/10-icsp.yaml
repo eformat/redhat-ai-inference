@@ -7,6 +7,7 @@ kind: ImageContentSourcePolicy
 metadata:
   name: quay-registry
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   repositoryDigestMirrors:

@@ -8,6 +8,7 @@ metadata:
   name: nvidia-dcgm-exporter-dashboard
   namespace: openshift-config-managed
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "1"
   labels:
     console.openshift.io/dashboard: "true"

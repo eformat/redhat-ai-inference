@@ -6,6 +6,7 @@ kind: Namespace
 metadata:
   name: redhat-ods-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-2"
   labels:
     openshift.io/cluster-monitoring: "true"
@@ -15,6 +16,7 @@ kind: Namespace
 metadata:
   name: openshift-nfd
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-2"
   labels:
     openshift.io/cluster-monitoring: "true"
@@ -24,6 +26,7 @@ kind: Namespace
 metadata:
   name: nvidia-gpu-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-2"
   labels:
     openshift.io/cluster-monitoring: "true"
@@ -33,6 +36,7 @@ kind: Namespace
 metadata:
   name: openshift-devspaces
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-2"
   labels:
     openshift.io/cluster-monitoring: "true"
@@ -42,6 +46,7 @@ kind: Namespace
 metadata:
   name: openshift-lws-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-2"
   labels:
     openshift.io/cluster-monitoring: "true"
@@ -51,6 +56,7 @@ kind: Namespace
 metadata:
   name: openshift-jobset-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-2"
   labels:
     openshift.io/cluster-monitoring: "true"
@@ -60,6 +66,7 @@ kind: Namespace
 metadata:
   name: openshift-kueue-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-2"
   labels:
     openshift.io/cluster-monitoring: "true"
@@ -69,6 +76,7 @@ kind: Namespace
 metadata:
   name: kuadrant-system
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-2"
   labels:
     openshift.io/cluster-monitoring: "true"

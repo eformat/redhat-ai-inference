@@ -7,6 +7,7 @@ metadata:
   name: rhods-operator
   namespace: redhat-ods-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "0"
 spec:
   channel: beta
@@ -21,6 +22,7 @@ metadata:
   name: nfd
   namespace: openshift-nfd
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "0"
 spec:
   channel: stable
@@ -35,6 +37,7 @@ metadata:
   name: gpu-operator-certified
   namespace: nvidia-gpu-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "0"
 spec:
   channel: v26.7
@@ -49,6 +52,7 @@ metadata:
   name: leader-worker-set
   namespace: openshift-lws-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "0"
 spec:
   channel: stable-v1.0
@@ -63,6 +67,7 @@ metadata:
   name: job-set
   namespace: openshift-jobset-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "0"
 spec:
   channel: stable-v1.0
@@ -77,6 +82,7 @@ metadata:
   name: kueue-operator
   namespace: openshift-kueue-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "0"
 spec:
   channel: stable-v1.4
@@ -91,6 +97,7 @@ metadata:
   name: rhcl-operator
   namespace: kuadrant-system
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "0"
 spec:
   channel: stable
@@ -105,6 +112,7 @@ metadata:
   name: cluster-observability-operator
   namespace: redhat-ods-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "0"
 spec:
   channel: stable
@@ -119,6 +127,7 @@ metadata:
   name: opentelemetry-product
   namespace: redhat-ods-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "0"
 spec:
   channel: stable
@@ -133,6 +142,7 @@ metadata:
   name: tempo-product
   namespace: redhat-ods-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "0"
 spec:
   channel: stable
@@ -147,6 +157,7 @@ metadata:
   name: devspaces
   namespace: openshift-devspaces
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "0"
 spec:
   channel: stable

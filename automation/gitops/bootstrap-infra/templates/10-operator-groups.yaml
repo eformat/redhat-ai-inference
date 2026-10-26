@@ -8,6 +8,7 @@ metadata:
   name: rhods-operator-og
   namespace: redhat-ods-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   upgradeStrategy: Default
@@ -18,6 +19,7 @@ metadata:
   name: kueue-operator-og
   namespace: openshift-kueue-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   upgradeStrategy: Default
@@ -28,6 +30,7 @@ metadata:
   name: rhcl-operator-og
   namespace: kuadrant-system
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   upgradeStrategy: Default
@@ -38,6 +41,7 @@ metadata:
   name: nfd-og
   namespace: openshift-nfd
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   targetNamespaces:
@@ -50,6 +54,7 @@ metadata:
   name: gpu-operator-certified-og
   namespace: nvidia-gpu-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   targetNamespaces:
@@ -62,6 +67,7 @@ metadata:
   name: leader-worker-set-og
   namespace: openshift-lws-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   targetNamespaces:
@@ -74,6 +80,7 @@ metadata:
   name: job-set-og
   namespace: openshift-jobset-operator
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   targetNamespaces:
@@ -86,6 +93,7 @@ metadata:
   name: devspaces-operator-group
   namespace: openshift-devspaces
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   upgradeStrategy: Default
