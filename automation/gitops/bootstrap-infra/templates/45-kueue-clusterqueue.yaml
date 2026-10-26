@@ -39,3 +39,23 @@ spec:
               nominalQuota: 256Gi
             - name: nvidia.com/gpu
               nominalQuota: 1
+---
+# The flavor the ClusterQueue references. The NVIDIA GPU operator taints GPU
+# nodes (nvidia.com/gpu=l4-gpu:NoSchedule) and re-applies the taint if it is
+# removed, so the toleration must reach admitted pods through Kueue: a
+# ResourceFlavor's taints are added as tolerations to every pod it admits,
+# letting model-server pods schedule on the GPU node. Pods also bind to the
+# GPU node by their nvidia.com/gpu request, so no nodeLabels are needed.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata:
+  name: default-flavor
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  taints:
+    - effect: NoSchedule
+      key: nvidia.com/gpu
+      value: l4-gpu
+

@@ -1,14 +1,32 @@
 ---
+# GPU-enabled hardware profile (module 1 — model deployments).
+#
+# RHOAI 3.6-ea2: the LLM deploy wizard's hardware profile provides the
+# resource identifiers — the serving-engine presets (LLMInferenceServiceConfig,
+# e.g. v3-6-0-ea-2-kserve-config-llm-single-node-template-nvidia-cuda) carry
+# ONLY the vLLM image with EMPTY resources, so the GPU request must come from
+# the profile. Without an Accelerator identifier the wizard's only profile was
+# cpu-only and the created LLMInferenceService requested 2 CPU / 4Gi with NO
+# nvidia.com/gpu — vLLM would never see the GPU.
+#
+# The kueue localQueueName is REQUIRED: the wizard only offers profiles with a
+# local queue to Kueue-managed projects ("Only hardware profiles configured
+# with a local queue are shown").
+#
+# Node placement (the tainted GPU node) is NOT set here — hardware profiles
+# must not carry tolerations/node selectors for Kueue-managed workloads; the
+# ClusterQueue's ResourceFlavor (45-kueue-clusterqueue.yaml) applies the GPU
+# node taint toleration and node label to admitted pods instead.
 apiVersion: infrastructure.opendatahub.io/v1
 kind: HardwareProfile
 metadata:
   annotations:
     opendatahub.io/dashboard-feature-visibility: '[]'
     opendatahub.io/disabled: "false"
-    opendatahub.io/display-name: cpu-only
+    opendatahub.io/display-name: GPU serving (NVIDIA L40S)
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "2"
-  name: cpu-only
+  name: gpu-serving
   namespace: redhat-ods-applications
 spec:
   identifiers:
@@ -18,12 +36,18 @@ spec:
     maxCount: 28
     minCount: 1
     resourceType: CPU
-  - defaultCount: 4Gi
+  - defaultCount: 16Gi
     displayName: Memory
     identifier: memory
     maxCount: 128Gi
     minCount: 1Gi
     resourceType: Memory
+  - defaultCount: 1
+    displayName: NVIDIA L40S GPU
+    identifier: nvidia.com/gpu
+    maxCount: 1
+    minCount: 1
+    resourceType: Accelerator
   scheduling:
     kueue:
       localQueueName: default
