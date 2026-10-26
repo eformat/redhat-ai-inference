@@ -3,21 +3,14 @@
 # dashboard-operator never deploys the /perses proxy and requests to
 # /perses/api/* fall through to the SPA index.html).
 #
-# PARTIAL CR, applied with ServerSideApply so ArgoCD owns ONLY
-# spec.observability. The full Dashboard CR is operator-generated and carries
-# cluster-specific, operator-set fields (notably spec.gateway.domain, derived
-# from the cluster ingress domain at runtime) — owning those in git would
-# clobber the operator's values on each cluster. This is exactly the shape of
-# the live patch that fixed prelude2:
-#   oc patch dashboard default-dashboard -n redhat-ods-applications \
-#     --type merge -p '{"spec":{"observability":{"enabled":true,
-#     "persesService":{"name":"data-science-perses",
-#     "namespace":"redhat-ods-monitoring","port":8080}}}}'
-apiVersion: dashboard.opendatahub.io/v1
+# RHOAI 3.6-ea2: the Dashboard CR moved to the components.platform group and is
+# CLUSTER-SCOPED (no namespace). PARTIAL CR, applied with ServerSideApply so
+# ArgoCD owns ONLY spec.observability — the operator keeps managing the rest of
+# the spec it generated (gateway.domain is operator-set and cluster-specific).
+apiVersion: components.platform.opendatahub.io/v1alpha1
 kind: Dashboard
 metadata:
   name: default-dashboard
-  namespace: redhat-ods-applications
   annotations:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true,ServerSideApply=true
     argocd.argoproj.io/sync-wave: "3"
