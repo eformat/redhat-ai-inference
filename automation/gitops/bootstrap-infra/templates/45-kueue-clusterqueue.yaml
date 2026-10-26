@@ -1,0 +1,41 @@
+# Kueue queues for the lab (module 1 — model deployments are Kueue-managed).
+#
+# RHOAI 3.6-ea2: every project the dashboard creates is labelled
+# kueue.openshift.io/managed=true, so LLMInferenceService deployments are
+# Kueue-managed and need a LocalQueue named `default` (the DSC kueue
+# component's defaultLocalQueueName) in the project — without it the
+# deployment sits Inadmissible with "Queue default queue does not exist".
+#
+# This ClusterQueue is the platform-level queue the per-project LocalQueues
+# point at (the DSC kueue component's defaultClusterQueueName is also
+# `default`). The nominalQuota covers the workshop GPU node: 1 NVIDIA GPU
+# plus headroom for the serving pod's cpu/memory requests. Per-project
+# LocalQueues live in automation/gitops/workshop-apps (lab-scoped — the
+# student project is created from the dashboard after this chart syncs).
+#
+# Wave 2: after the DSC (wave 1) whose kueue component config the queue
+# names must match; the kueue CRDs exist once the wave-0 kueue-operator CSV
+# rolls out (SkipDryRunOnMissingResource covers the fresh-cluster race).
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: default
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  namespaceSelector: {}
+  resourceGroups:
+    - coveredResources:
+        - cpu
+        - memory
+        - nvidia.com/gpu
+      flavors:
+        - name: default-flavor
+          resources:
+            - name: cpu
+              nominalQuota: 64
+            - name: memory
+              nominalQuota: 256Gi
+            - name: nvidia.com/gpu
+              nominalQuota: 1

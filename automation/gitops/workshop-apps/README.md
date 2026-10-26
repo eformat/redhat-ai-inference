@@ -10,6 +10,7 @@ here is lab-scoped and applied manually with `oc apply -k`.
 | File | Unblocks | Notes |
 |---|---|---|
 | `namespace-labels.yaml` | M1/M4 — projects UI visibility, e2e M1 | `opendatahub.io/dashboard=true` — without it the lab project is invisible in the RHOAI projects UI (2026-10-25 cluster-drift gap) |
+| `kueue-localqueue.yaml` | M1 — model deployment admission | LocalQueue `default` → ClusterQueue `default` (bootstrap-infra chart) — without it the LLMInferenceService sits Inadmissible "Queue default queue does not exist" (the dashboard-created project is auto-labelled kueue-managed) |
 | `model-serviceaccount.yaml` | M1/M3 — model token minting, MaaS calls | `model-tester` SA used to mint model tokens |
 | `maas-chat-client.yaml` | M4 — 404/405/502 | code ConfigMap + Deployment, mirrored from `qa-automation/e2e.yml` M4 |
 | `maas-credentials-secret.yaml` | M4 — 405/502 | **TEMPLATED** — substitute a freshly minted MaaS API key before enabling |

@@ -1,0 +1,21 @@
+# Kueue LocalQueue for the student project (module 1 — model deployments are
+# Kueue-managed).
+#
+# The dashboard-created project is labelled kueue.openshift.io/managed=true,
+# so LLMInferenceService deployments are Kueue-managed and need this
+# LocalQueue named `default` (the DSC kueue component's defaultLocalQueueName)
+# in the project — without it the deployment sits Inadmissible with
+# "Queue default queue does not exist" (2026-10-26 catalog-deploy gap).
+#
+# Points at the platform-level ClusterQueue `default` from the bootstrap-infra
+# chart (automation/gitops/bootstrap-infra/templates/45-kueue-clusterqueue.yaml).
+# LAB-SCOPED: apply after the student project exists (created from the
+# dashboard in module 1 Ex 1). Wave/skip annotations not needed — applied
+# manually with oc apply -k after the project exists.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  name: default
+  namespace: lab-user-dev
+spec:
+  clusterQueue: default
