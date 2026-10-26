@@ -141,45 +141,61 @@ You can discover and select verified generative AI models in the OpenShift
 AI *model catalog* — a curated, user-facing directory for finding models
 appropriate for your business use case.
 
-=== Deploy through the model serving wizard
+=== Deploy through the AI hub deploy wizard
 
-To use the vLLM NVIDIA GPU ServingRuntime for KServe, GPU support must be
-enabled on the cluster and the Node Feature Discovery Operator must be
-installed and configured. Both are already set up in the lab environment.
+To deploy the model on the single-model serving platform (KServe), GPU
+support must be enabled on the cluster and the Node Feature Discovery
+Operator must be installed and configured. Both are already set up in the
+lab environment.
 
-. In the OpenShift AI dashboard left menu, click *Projects*.
-. Click the name of your project. The project details page opens.
-. Click the *Deployments* tab.
+. In the OpenShift AI dashboard left menu, click *AI hub*, then *Models*.
 . Click *Deploy model*. The Deploy a model wizard opens.
-. In the *Model details* section, provide information about the model:
-.. From the *Model location* list, select the connection type that points
-to the Nemotron 3 Nano 30B A3B FP8 modelcar (an OCI-compliant registry
-image) and complete the connection detail fields.
-.. From the *Model type* list, select *Generative AI model*.
+. In the *Preconfigure deployment* step, select your project
+(`lab-user-dev`) and click *Next*.
+. In the *Model details* step, provide the model location:
+.. From the *Model location* list, select *OCI compliant registry*.
+.. From the *Access type* list, select *Pull secret*. The lab environment
+pre-pulls the model and serving images and provides the registry
+credentials through the project's default pull secret, so you can leave
+the *Secret details* file upload empty.
+.. In the *Registry host* field, enter `registry.redhat.io`.
+.. In the *Model URI* field, enter
+`registry.redhat.io/rhai/modelcar-nvidia-nemotron-3-nano-30b-a3b-fp8:3.0`.
+The wizard adds the `oci://` prefix, and the registry host in the URI must
+match the *Registry host* field. This URI points to the validated
+Nemotron 3 Nano 30B A3B FP8 modelcar — an OCI-compliant registry image
+whose filesystem holds the model weights, so the serving engine loads it
+directly from the image.
+.. With *Create a connection to this location* selected, enter
+`nemotron-modelcar` in the *Name* field.
+.. From the *Model type* list, select *Generative AI model (Example, LLM)*.
 .. Click *Next*.
-. In the *Model deployment* section, configure the deployment:
+. In the *Model deployment* step, configure the deployment:
+.. Keep the *LLM inference service* deployment mode selected.
 .. In the *Model deployment name* field, enter `nemotron-3-nano-30b-a3b`.
 .. In the *Description* field, enter a short description of the deployment.
-.. From the *Hardware profile* list, select the profile that exposes one
-NVIDIA GPU. Selecting an NVIDIA GPU accelerator filters for compatible
-runtimes such as the vLLM NVIDIA GPU ServingRuntime for KServe.
-.. Optional: click *Customize resource requests and limits* and set the
-values listed in the configuration table below.
-.. In the *Serving runtime* field, select *vLLM NVIDIA GPU ServingRuntime
-for KServe*. If the system can identify a single distinct runtime for the
-selected accelerator, the auto-select option picks it for you.
-.. In the *Number of model server replicas to deploy* field, enter `1`.
+.. Keep the *default-profile* hardware profile. The profile provides the
+CPU and memory baseline; the GPU comes from the accelerator configuration
+in the next step.
+.. From the *Select an accelerator configuration* list, select *vLLM NVIDIA
+CUDA GPU LLMInferenceServiceConfig Single Node*. The preset provisions the
+vLLM serving engine with one NVIDIA GPU on a single node.
+.. In the *Replica count* field, enter `1`.
 .. Click *Next*.
-. In the *Advanced settings* section:
-.. Optional: select *Add as AI asset endpoint* to publish the model's
-endpoint on the *Gen AI studio → AI asset endpoints* page, and enter `chat`
-in the *Use case* field.
-.. Optional: select *Model access* to make the model available through an
-external route.
-.. Select *Require token authentication* and enter a service account name,
-for example `model-tester`. You use the generated token in Exercise 3.
-.. In the *Deployment strategy* section, select *Rolling update*.
-. Click *Deploy*.
+. In the *Advanced settings* step:
+.. Optional: select *Add as AI asset endpoint* (tech preview) to publish
+the model's endpoint on the *AI asset endpoints* page and make it testable
+in the Playground.
+.. Leave *Publish as MaaS* cleared — publishing the model through the MaaS
+gateway is covered in Module 3.
+.. Keep *Token authentication* enabled and enter `model-tester` in the
+*Service account name* field. The actual tokens are created and displayed
+when the model server is configured; you use the generated token in
+Exercise 3.
+.. Optional: expand *Additional runtime arguments* to add custom vLLM
+arguments such as the values listed in the configuration table below.
+.. Click *Next*.
+. On the *Review* step, check the summary and click *Deploy*.
 
 Verification: the deployed model appears with a *Ready* status on the
 *Gen AI studio → AI asset endpoints* page (if you selected *Add as AI asset
@@ -195,7 +211,7 @@ oc get pods -w
 
 ----
 NAME                                                    READY   STATUS    RESTARTS   AGE
-nemotron-3-nano-30b-a3b-predictor-7d9f8b6c5-k2p9q       1/1     Running   0          4m
+nemotron-3-nano-30b-a3b-kserve-7d9f8b6c5-k2p9q          2/2     Running   0          4m
 ----
 
 The pod transitions from `Pending` to `Running` once the model server is
@@ -212,8 +228,12 @@ image::101-deployment-status.png[AI asset endpoints page showing the deployed mo
 === What the wizard creates
 
 Behind the scenes, the wizard creates an `LLMInferenceService` resource on
-the single-model serving platform (KServe). The resource shown here is the
-configuration used in this lab, simplified for readability:
+the single-model serving platform (KServe). The accelerator configuration
+you selected (the `vLLM NVIDIA CUDA GPU LLMInferenceServiceConfig Single
+Node` preset) provisions the serving engine image and the GPU resources,
+and any custom runtime arguments you added in the Advanced settings appear
+as the `VLLM_ADDITIONAL_ARGS` environment variable. The resource shown here
+is the configuration used in this lab, simplified for readability:
 
 [source,yaml]
 ----
