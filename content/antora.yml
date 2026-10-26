@@ -12,3 +12,4 @@ asciidoc:
     user: 'lab-user1'
     password: "%password%"
     openshift_console_url: https://console-openshift-console.apps.cluster.example.com
+    openshift_api_server_url: "https://api.cluster.example.com:6443"

@@ -29,6 +29,17 @@ Password: {password}
 
 These credentials are scoped to your lab environment — do not share them.
 
+== Log in from the terminal
+
+. Switch to the *Terminal* tab (or use the web terminal in the right panel).
+
+. Log in to the cluster API with the `oc` CLI:
++
+[source,bash,role="execute",subs="attributes"]
+----
+oc login {openshift_api_server_url} -u {user} -p {password} --insecure-skip-tls-verify=true
+----
+
 == Cluster environment
 
 Your environment runs OpenShift with Red Hat OpenShift AI (RHOAI) 3.6
