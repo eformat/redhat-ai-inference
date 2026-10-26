@@ -13,11 +13,15 @@
 # local queue to Kueue-managed projects ("Only hardware profiles configured
 # with a local queue are shown").
 #
-# Node placement: Kueue ResourceFlavor taints DON'T work here — the RHOAI
-# operator's kueue queue management (autoCreateQueues) actively strips
-# ResourceFlavor specs back to empty, so the GPU node toleration is carried
-# by this profile's scheduling.node.tolerations instead (the HardwareProfile
-# CRD supports it). The NVIDIA GPU operator taints GPU nodes
+# Node placement: BOTH alternative paths are blocked — Kueue ResourceFlavor
+# taints are stripped by the RHOAI operator's queue management, and
+# scheduling.node.tolerations are rejected by the HardwareProfile CRD's CEL
+# validation ("When schedulingType is 'Queue' ... the 'node' field must not
+# be set"). The GPU node toleration is delivered by the custom accelerator
+# config instead: 50-accelerator-config.yaml (LLMInferenceServiceConfig with
+# opendatahub.io/config-type=accelerator) — the wizard lists it in its
+# Accelerator configuration dropdown and its template tolerations merge into
+# the created LLMInferenceService. The NVIDIA GPU operator taints GPU nodes
 # (nvidia.com/gpu=l4-gpu:NoSchedule) and re-applies the taint if removed.
 apiVersion: infrastructure.opendatahub.io/v1
 kind: HardwareProfile
@@ -54,10 +58,4 @@ spec:
     kueue:
       localQueueName: default
       priorityClass: None
-    node:
-      tolerations:
-      - effect: NoSchedule
-        key: nvidia.com/gpu
-        operator: Equal
-        value: l4-gpu
     type: Queue
