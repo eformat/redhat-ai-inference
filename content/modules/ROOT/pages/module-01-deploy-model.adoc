@@ -111,6 +111,24 @@ Platform-level components — the serving runtime templates, operators, and
 the DataScienceCluster configuration — are managed by the cluster
 administrator and run outside your project.
 
+Your lab user has no project yet. Create it from the OpenShift AI
+dashboard:
+
+. In the dashboard left menu, click *Projects*. The Projects page opens
+with no projects listed.
+. Click *Create project*.
+. In the *Name* field, enter `lab-user-dev`.
+. Optional: enter a *Description*.
+. Click *Create*. Your project opens in the dashboard.
+
+[NOTE]
+====
+Create the project from the dashboard rather than with `oc new-project` —
+the dashboard adds the OpenShift AI labels that make the project visible on
+the *Projects* page and selectable in the deploy wizard later in this
+module.
+====
+
 image::101-project-layout.png[Projects page showing the lab-user-dev student project,link=self,window=blank,width=700]
 
 == Exercise 2: Deploy the model for inference
@@ -453,6 +471,7 @@ foundation for every module that follows.
 **What you accomplished:**
 
 * Explored the lab environment and confirmed the platform and GPU node were ready.
+* Created your own Data Science project, `lab-user-dev`.
 * Deployed the model for inference with the vLLM NVIDIA GPU ServingRuntime for KServe.
 * Verified the deployment and sent a test inference request through the OpenAI-compatible endpoint.
 

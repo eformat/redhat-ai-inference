@@ -119,7 +119,6 @@ reports `Ready`:
 [source,bash,role="execute"]
 ----
 oc get dsc
-oc get dsccommon
 ----
 
 [NOTE]
