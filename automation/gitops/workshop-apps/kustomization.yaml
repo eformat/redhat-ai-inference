@@ -15,7 +15,6 @@ resources:
   - namespace-labels.yaml
   - model-serviceaccount.yaml
   - maas-chat-client.yaml
-  - kueue-localqueue.yaml
   # TEMPLATED — substitute a freshly minted MaaS API key before enabling (see README.md):
   # - maas-credentials-secret.yaml
 # devspaces.yaml and observability.yaml MIGRATED to the bootstrap-infra Helm

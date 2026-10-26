@@ -30,6 +30,15 @@ spec:
     kueue:
       defaultClusterQueueName: default
       defaultLocalQueueName: default
+      # Unmanaged is the SUPPORTED state with the Red Hat build of Kueue
+      # Operator (RHBoK): "Managed mode is not compatible with the Red Hat
+      # build of Kueue Operator. If both are installed, OpenShift AI stops
+      # reconciliation to avoid conflicts." (RHOAI 3.5 docs). RHBoK owns the
+      # Kueue lifecycle; this chart installs its subscription. With
+      # Unmanaged + autoCreateQueues false (self-managed queues) the
+      # ClusterQueue (GPU quota) lives in 45-kueue-clusterqueue.yaml and the
+      # dashboard creates a LocalQueue in each new project it creates
+      # ("independently of the autoCreateQueues setting").
       managementState: Unmanaged
     llamastackoperator:
       managementState: Removed
