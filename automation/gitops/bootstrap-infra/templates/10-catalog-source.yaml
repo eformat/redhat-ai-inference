@@ -1,0 +1,19 @@
+# RHOAI 3.6-ea2 nightly catalog (digest-pinned). Must exist before the
+# rhods-operator Subscription (wave 0) resolves its bundle.
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: {{ .Values.catalog.name }}
+  namespace: openshift-marketplace
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  displayName: RHOAI 3.6-ea2 Nightly
+  grpcPodConfig:
+    securityContextConfig: restricted
+  image: {{ .Values.catalog.image }}
+  publisher: RHOAI Development Catalog
+  sourceType: grpc
+  updateStrategy:
+    registryPoll:
+      interval: 15m

@@ -1,0 +1,91 @@
+# OperatorGroups: one per operator namespace. AllNamespaces (spec: {}) for the
+# global operators (rhods/kueue/rhcl/devspaces), own-namespace for the rest —
+# matching the pool olm chart rendering on prelude2.
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: rhods-operator-og
+  namespace: redhat-ods-operator
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  upgradeStrategy: Default
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: kueue-operator-og
+  namespace: openshift-kueue-operator
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  upgradeStrategy: Default
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: rhcl-operator-og
+  namespace: kuadrant-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  upgradeStrategy: Default
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: nfd-og
+  namespace: openshift-nfd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  targetNamespaces:
+    - openshift-nfd
+  upgradeStrategy: Default
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: gpu-operator-certified-og
+  namespace: nvidia-gpu-operator
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  targetNamespaces:
+    - nvidia-gpu-operator
+  upgradeStrategy: Default
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: leader-worker-set-og
+  namespace: openshift-lws-operator
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  targetNamespaces:
+    - openshift-lws-operator
+  upgradeStrategy: Default
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: job-set-og
+  namespace: openshift-jobset-operator
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  targetNamespaces:
+    - openshift-jobset-operator
+  upgradeStrategy: Default
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: devspaces-operator-group
+  namespace: openshift-devspaces
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  upgradeStrategy: Default

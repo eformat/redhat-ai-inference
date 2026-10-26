@@ -17,7 +17,6 @@ resources:
   - maas-chat-client.yaml
   # TEMPLATED — substitute a freshly minted MaaS API key before enabling (see README.md):
   # - maas-credentials-secret.yaml
-  # Added by the Dev Spaces task (Module 4 screenshots):
-  - devspaces.yaml
-  # Added by the observability task (Module 6 screenshots):
-  - observability.yaml
+# devspaces.yaml and observability.yaml MIGRATED to the bootstrap-infra Helm
+# chart (automation/gitops/bootstrap-infra, ArgoCD `bootstrap` app) — do not
+# re-add them here, they are now GitOps-managed.

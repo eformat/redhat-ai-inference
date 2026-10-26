@@ -1,0 +1,13 @@
+# RHOAI dashboard admin group. The OdhDashboardConfig declares
+# groupsConfig.adminGroups: rhods-admins — membership gives the lab user the
+# admin dashboard experience (deploy wizard, admin views) without
+# cluster-admin. Created before the RHOAI operator installs (wave -2) so the
+# dashboard comes up already knowing the admin group member.
+apiVersion: user.openshift.io/v1
+kind: Group
+metadata:
+  name: rhods-admins
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+users:
+  - {{ .Values.lab.adminUser }}

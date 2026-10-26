@@ -13,13 +13,17 @@ here is lab-scoped and applied manually with `oc apply -k`.
 | `model-serviceaccount.yaml` | M1/M3 — model token minting, MaaS calls | `model-tester` SA used to mint model tokens |
 | `maas-chat-client.yaml` | M4 — 404/405/502 | code ConfigMap + Deployment, mirrored from `qa-automation/e2e.yml` M4 |
 | `maas-credentials-secret.yaml` | M4 — 405/502 | **TEMPLATED** — substitute a freshly minted MaaS API key before enabling |
-| `devspaces.yaml` | M4 — 401/402/403/406 | Dev Spaces operator install (added by the Dev Spaces task) |
-| `observability.yaml` | M6 — 601/604/605/606 | observability stack config (added by the observability task) |
+
+`devspaces.yaml` and `observability.yaml` **migrated** to the `bootstrap-infra`
+Helm chart (`automation/gitops/bootstrap-infra`, wired to the ArgoCD `bootstrap`
+app on the lab cluster) — the platform prerequisites (RHOAI, GPU, RHCL/Kuadrant,
+monitoring operators, Dev Spaces, EvalHub chain, observability fixes) are
+GitOps-managed there now and must not be applied from here anymore.
 
 ## Apply
 
 ```sh
-export KUBECONFIG=~/.kube/config.prelude2
+export KUBECONFIG=~/.kube/config.ai-inference
 # 1. verify the rendered output
 kustomize build automation/gitops/workshop-apps
 # 2. mint a fresh MaaS API key (1h expiry — see module-03) and substitute it
@@ -27,6 +31,9 @@ kustomize build automation/gitops/workshop-apps
 # 3. apply
 oc apply -k automation/gitops/workshop-apps
 ```
+
+The platform prerequisites themselves are NOT applied here — they come from the
+`bootstrap-infra` Helm chart via the ArgoCD `bootstrap` app on the lab cluster.
 
 ## Secrets
 

@@ -1,0 +1,64 @@
+# Module 6 observability fixes (layers 2+3 of the prelude2 root-cause fix;
+# layer 1 — the monitoring operator subscriptions — lives in
+# 20-subscriptions.yaml).
+#
+# 2. The Dashboard CR's spec.observability is patched in 60-dashboard-cr.yaml
+#    (perses proxy — upstream opendatahub-io/opendatahub-operator#3910).
+# 3. The RHOAI Monitoring CR's perses-operator-access NetworkPolicy only allows
+#    ingress from openshift-cluster-observability-operator, but the COO runs in
+#    redhat-ods-operator here — the NetworkPolicy below adds the missing allow
+#    rule, and the PersesDatasource gives the applications-project usage
+#    dashboard its datasource.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: perses-operator-redhat-ods-operator-access
+  namespace: redhat-ods-monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/managed-by: perses-operator
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: redhat-ods-operator
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: perses-operator
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+# The Usage dashboard shipped into redhat-ods-applications references its
+# datasource by name in its own project; the RHOAI operator only creates the
+# PersesDatasource in redhat-ods-monitoring. Mirror it so the Usage tab's
+# overview cards and token consumption panels resolve it.
+apiVersion: perses.dev/v1alpha1
+kind: PersesDatasource
+metadata:
+  name: data-science-prometheus-datasource
+  namespace: redhat-ods-applications
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "3"
+  labels:
+    platform.opendatahub.io/part-of: monitoring
+spec:
+  config:
+    default: false
+    display:
+      description: Data Science MonitoringStack Thanos Querier - provides DS workload metrics
+      name: Data Science Prometheus
+    plugin:
+      kind: PrometheusDatasource
+      spec:
+        proxy:
+          kind: HTTPProxy
+          spec:
+            url: http://thanos-querier-data-science-thanos-querier.redhat-ods-monitoring.svc.cluster.local:10902

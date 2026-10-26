@@ -1,5 +1,13 @@
 apiVersion: v2
 name: bootstrap-infra
-description: Cluster-scoped shared resources
+description: >-
+  Workshop prerequisites for the redhat-ai-inference lab: RHOAI 3.6 nightly
+  (operator + DSCI/DSC with MaaS), GPU operator + NFD + DCGM monitoring,
+  RHCL/Kuadrant, kueue/LWS/jobset operators, RHOAI 3.6 monitoring operators,
+  Dev Spaces, MLflow + EvalHub chain, MaaS postgres, and the observability
+  fixes. Migrated from rhoai-cluster-pool overlay prelude-nightly-36.
 type: application
-version: 0.1.0
+version: 0.2.0
+appVersion: "3.6-ea2"
+deployer:
+  domain: apps.example.com

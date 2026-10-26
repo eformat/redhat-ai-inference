@@ -1,0 +1,17 @@
+# DCGM exporter dashboard for the OCP console (Observe -> Dashboards).
+# The grafana JSON contains grafana legend template variables, so it ships as
+# a chart data file (files/dcgm-exporter-dashboard.json) instead of inline
+# YAML (helm would parse them as template actions).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nvidia-dcgm-exporter-dashboard
+  namespace: openshift-config-managed
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    console.openshift.io/dashboard: "true"
+    console.openshift.io/odc-dashboard: "true"
+data:
+  dcgm-exporter-dashboard.json: |-
+{{ .Files.Get "files/dcgm-exporter-dashboard.json" | indent 4 }}
