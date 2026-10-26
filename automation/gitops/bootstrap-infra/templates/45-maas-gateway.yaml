@@ -130,6 +130,13 @@ rules:
   - apiGroups: ["route.openshift.io"]
     resources: ["routes"]
     verbs: ["create"]
+  # OpenShift gates spec.host on a Route behind the routes/custom-host
+  # subresource — plain routes/create gives "Forbidden: you do not have
+  # permission to set the host field of the route" (hit by the hook Job).
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes/custom-host"]
+    resourceNames: ["maas-gateway-route"]
+    verbs: ["create", "patch", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
