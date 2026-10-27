@@ -197,6 +197,14 @@ Both report `PHASE` `Active`:
 
 image::304b-subscriptions-active.png[The subscription and authorization policy Active in the models-as-a-service namespace,link=self,window=blank,width=850]
 
+The same pairing is visible in the console. Navigate to *Settings → MaaS
+governance*: the *Overview* tab lists each published model with its
+subscription and authorization policy pairing — `redhatainvidia-nemotron-nano-9`
+shows *Ready* with 1 subscription and 1 authorization policy. Use *Create
+subscription* and *Create authorization policy* on this page to add tiers.
+
+image::303c-maas-governance.png[The MaaS governance page under Settings showing the model Ready with its subscription and policy pairing,link=self,window=blank,width=700]
+
 Review your own subscription from the consumer view:
 
 . Navigate to *Gen AI studio → API keys*. The page combines API keys and

@@ -239,6 +239,17 @@ module 2: verify the flow live → rewrite concise → retrofit terminal renders
       (www/modules/module-03-...html): every command renders runnable, 0
       literal placeholders, Antora 0 errors.
 
+## GOVERNANCE SETTINGS SCREENSHOT (2026-10-28, Mike's request)
+
+- [x] Ex 3 gains the Settings → MaaS governance admin view: captured
+      303c-maas-governance.png (73KB, 1600x900) from the live cluster (the
+      Overview tab: the model Ready with 1 subscription + 1 authorization
+      policy, Create subscription/Create authorization policy buttons, the
+      Settings nav with MaaS governance). The page URL is /maas/maas-governance
+      (NOT /settings/...). Added to Ex 3 after the 304b oc-get render: the
+      pairing is visible in the console + how to add tiers. Module-03 now has
+      11 image references, Antora 0 errors, secrets clean.
+
 ## Environment state left behind
 
 - The MaaSModelRef redhatainvidia-nemotron-nano-9 (lab-user-dev): Ready, all
