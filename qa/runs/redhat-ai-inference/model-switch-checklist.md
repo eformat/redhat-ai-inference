@@ -57,6 +57,33 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
 - [ ] Verify the external URL `https://inference-gateway.apps.<cluster-domain>/...`
       resolves (curl + the dashboard's Deployments → Internal and external endpoint)
 
+## Pending — screenshots (recaptured for the 9B flow)
+
+- [x] Recaptured all 10 Module 1 screenshots at 1600x900 for the 9B flow:
+      catalog (nemotron search + 9B card visible), 9B model card, wizard model
+      details (9B modelcar URI), wizard deployment ("GPU serving (NVIDIA GPU)"
+      profile + "vLLM NVIDIA GPU Single Node" accelerator), wizard advanced
+      (model-tester + the 3 args), wizard review, deployment status (Ready on
+      AI asset endpoints), endpoints dialog
+- [x] Wizard walked WITHOUT clicking Deploy (screenshots only) the first time —
+      but the deploy wizard opened in update/cleanup mode for the already-
+      deployed model and Cancel DELETED the live deployment (events: the
+      config cleanup attempted mid-deletion). GOTCHA for docs/QA: never reopen
+      the deploy wizard for an already-deployed model — it is not safe to walk
+      it without deploying.
+- [x] Redeployed the 9B via the wizard for real (name `nemotron-nano-9b-v2`,
+      gpu-serving + vLLM NVIDIA GPU Single Node, model-tester SA, the 3 args,
+      AI asset endpoint) — READY True again, inference smoke-tested OK
+- [ ] AFTER the hostname fix sync: recapture `101-inference-endpoint.png` —
+      the dialog's External API endpoint currently shows the double-apps
+      hostname; the corrected single-apps hostname changes it
+- [x] SNI finding: once the Gateway listener has a hostname, connections with
+      a different SNI are reset ("Connection reset by peer") — the dialog's
+      Internal API endpoint (service-name SNI) does NOT work with a listener
+      hostname; the docs use the external hostname (resolves in-cluster via
+      the router wildcard, SNI matches) — same shape as the maas gateway
+
+
 ## Pending — images + docs (needs the model sorted first)
 
 - [ ] Recapture Module 1 screenshots for the 9B flow:
