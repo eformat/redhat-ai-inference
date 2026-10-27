@@ -7,40 +7,38 @@
 == Overview
 
 A model that only one team can reach is not production. In this module you
-transform the single-team deployment from Module 1 into a shared, scalable
-Model-as-a-Service (MaaS): a stable, externally reachable API endpoint governed
-by subscription-based access control — subscription tiers, API keys with expiry,
-token rate limits — and scaling policies.
+transform the single-team deployment from Module 1 into a shared
+Model-as-a-Service (MaaS): the model is published to a governed gateway where
+consumers authenticate with API keys and call a stable, OpenAI-compatible
+endpoint.
 
-The endpoint URL and API credentials you create here are the explicit handoff to
-Module 4, where the sample application consumes them. The scaling configuration
-you set here carries forward to Module 6.
+The endpoint URL and API key you create here are the explicit handoff to
+Module 4, where the sample application consumes them.
 
 .Prerequisites
-Modules 1–2 complete — the model is deployed and serving inference requests, and
-its performance has been benchmarked with EvalHub.
+Modules 1–2 complete — the model is deployed and serving inference requests.
 
 .Duration
-20 minutes (3 min review / 7 min configure shared service / 5 min access controls
-and endpoints / 5 min scaling)
+20 minutes (3 min review / 7 min publish the model / 5 min access controls and
+API key / 5 min scale and test)
 
 == Learning objectives
 
 By the end of this module you will be able to:
 
-* Configure a deployed model as a Model-as-a-Service for shared, scalable consumption
-* Manage access controls and API endpoint configuration for the model service
+* Publish a deployed model to the Model-as-a-Service gateway
+* Create API keys scoped to a subscription and consume the model through the
+  shared endpoint
 
 == Exercise 1: Review the Model-as-a-Service approach
 
 .3 minutes
 
 Models-as-a-Service (MaaS) provides subscription-based governance for large
-language model serving across your organization. It acts as a governance layer
-between users and the model serving infrastructure: consumers call a single,
-managed API endpoint, and the platform enforces centralized policies —
-authentication, token rate limits, quota — without modifying the underlying
-model serving components.
+language model serving. It acts as a governance layer between users and the
+model serving infrastructure: consumers call a single managed API endpoint,
+and the platform enforces centralized policies — authentication, token rate
+limits — without modifying the underlying model serving components.
 
 This is what changes from Module 1:
 
@@ -55,37 +53,26 @@ This is what changes from Module 1:
 |Subscriptions enforce token rate limits and track consumption per group
 
 |Access controlled by OpenShift project membership
-|Access controlled by subscriptions, API keys with expiry, and authorization policies
+|Access controlled by subscriptions, API keys, and authorization policies
 |===
-
-[NOTE]
-====
-Use MaaS when centralized governance across multiple teams is required; standard
-model serving is sufficient for single-team or single-user use cases. MaaS also
-prefers declarative configuration via GitOps — every governance object in this
-module is a Kubernetes custom resource, so it is version-controlled and
-automatically reconciled by the platform controllers.
-====
 
 Three custom resources do the governing:
 
-* `MaaSModelRef` — references the model and registers it with MaaS. Publishing a
-model to MaaS creates this object in the model's project namespace.
-* `MaaSSubscription` — defines subscription-based quota: which groups have quota
-for which models, with configurable token rate limits and a priority level that
-decides which subscription applies when a user belongs to several.
-* `MaaSAuthPolicy` — authorizes groups to access model endpoints through the API
-gateway. Subscriptions control token limits; authorization policies grant
-gateway access. Both are required for each model: a `MaaSAuthPolicy` without a
-matching `MaaSSubscription` returns HTTP 429 (no token quota is defined), and a
-`MaaSSubscription` without a `MaaSAuthPolicy` returns HTTP 403 (no gateway
-access).
+* `MaaSModelRef` — references the model and registers it with MaaS. It lives in
+the model's project namespace, next to the `LLMInferenceService` it names.
+* `MaaSSubscription` — defines quota: which groups have access to which models,
+with token rate limits. Subscriptions are read only from the
+`models-as-a-service` namespace.
+* `MaaSAuthPolicy` — authorizes groups to reach model endpoints through the API
+gateway. A subscription without a matching policy returns HTTP 429; a policy
+without a matching subscription returns HTTP 403.
+
+image::301-maas-governance-layer.png[MaaS governance-layer diagram showing the API gateway between consumers and models,link=self,window=blank,width=700]
 
 Consumers authenticate with an API key carrying the `sk-oai-` prefix and call
-the model through the standard OpenAI-compatible `/v1/chat/completions` endpoint
-with the model name in the request body — drop-in compatible with
-OpenAI-compatible SDKs and clients such as the Python `openai` library,
-LangChain, and LlamaIndex without requiring custom URL paths.
+the model through the standard OpenAI-compatible `/v1/chat/completions`
+endpoint with the model name in the request body — drop-in compatible with the
+Python `openai` library, LangChain, and LlamaIndex.
 
 [NOTE]
 ====
@@ -94,41 +81,15 @@ starting with OpenShift AI 3.4. MaaS APIs are evolving across releases, so
 verify API names against your installed version.
 ====
 
-image::301-maas-governance-layer.png[MaaS governance-layer diagram showing the API gateway between consumers and models,link=self,window=blank,width=700]
-
 == Exercise 2: Configure the model as a shared service
 
 .7 minutes
 
-Now that you have reviewed the MaaS governance layer, you will publish the
-model to the shared gateway.
-
-The model you deployed in Module 1 — `redhatainvidia-nemotron-nano-9`, serving on the
-NVIDIA L4 GPU node in your project — was deployed as an
-`LLMInferenceService` attached to the direct-serving gateway
-(`openshift-ai-inference`) for single-team access. Models published for MaaS
-use the `LLMInferenceService` architecture, which integrates with the MaaS
-gateway for subscription-based quota enforcement. Publishing the model
-re-attaches the router to the shared MaaS gateway (`maas-default-gateway`) —
-that gateway wiring, not a per-team route, is what makes the deployment
-shared.
-
-Publishing changes the router gateway section of the `LLMInferenceService`
-from the direct-serving gateway to the MaaS gateway:
-
-[source,yaml]
-----
-router:
-  gateway:
-    refs:
-      - name: maas-default-gateway
-        namespace: openshift-ingress
-    route: {}
-----
-
-With the router attached to the shared gateway, the model is served through
-the MaaS gateway at
-`https://maas.apps.<cluster-domain>/{project-namespace}/redhatainvidia-nemotron-nano-9`.
+The model you deployed in Module 1 — `redhatainvidia-nemotron-nano-9`, serving
+on the NVIDIA L4 GPU node in your project — is attached to the direct-serving
+gateway for single-team access. Publishing it to MaaS takes two steps: attach
+the model's route to the shared MaaS gateway, then register the model with a
+`MaaSModelRef`.
 
 Review the serving configuration for the deployed model:
 
@@ -136,50 +97,62 @@ Review the serving configuration for the deployed model:
 . Click the *Deployments* tab and locate `redhatainvidia-nemotron-nano-9`.
 . Confirm the model row shows *Ready* in the *Status* column.
 
-Publishing registers the model with MaaS through a `MaaSModelRef` in the
-model's project namespace:
+Attach the model's route to the shared MaaS gateway by patching the
+`LLMInferenceService` router:
 
-[source,yaml,subs="specialcharacters,attributes"]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
+oc patch llminferenceservice redhatainvidia-nemotron-nano-9 -n {project-namespace} --type merge \
+  -p '{"spec":{"router":{"gateway":{"refs":[{"name":"maas-default-gateway","namespace":"openshift-ingress"}],"route":{}}}}}'
+----
+
+The model keeps serving through its existing route; the patch adds the MaaS
+gateway as the route's parent, which is what makes the deployment shared.
+
+Register the model with MaaS through a `MaaSModelRef` in the model's project
+namespace:
+
+[source,bash,role="execute"]
+----
+cat <<'EOF' | oc apply -f -
 apiVersion: maas.opendatahub.io/v1alpha1
 kind: MaaSModelRef
 metadata:
   name: redhatainvidia-nemotron-nano-9
-  namespace: {project-namespace}
+  namespace: lab-user-dev
 spec:
   modelRef:
     kind: LLMInferenceService
     name: redhatainvidia-nemotron-nano-9
   tenantRef: models-as-a-service
+EOF
 ----
 
-[NOTE]
-====
-The explicit `tenantRef` is the advanced override — required when the
-`LLMInferenceService` was first attached to a non-MaaS gateway. When a model
-is published directly to the MaaS gateway, the tenant resolves
-automatically.
-====
-
-Verify the model is registered with MaaS:
+Verify the registration:
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
 oc get maasmodelref -n {project-namespace}
 ----
 
-The output lists a `MaaSModelRef` named `redhatainvidia-nemotron-nano-9` — the
-model is registered with MaaS. Its `RuntimeReady`, `GovernanceAttached`, and
-`Ready` conditions report `True` once registration completes; Exercise 4
-checks them explicitly.
+The `PHASE` column moves through three states as the platform catches up —
+`Failed` while the model's route is still attached to the direct-serving
+gateway, then `Pending` once the route resolves to the MaaS gateway, then
+`Ready` when governance pairing from Exercise 3 activates:
+
+image::303b-modelref-pending.png[The MaaSModelRef pending with the route attached to the maas-default-gateway,link=self,window=blank,width=850]
+
+At the `Pending` stage, `RuntimeReady=True` and `ModelIdentityUnique=True` are
+already set; the `GovernanceAttached=False / NoPairingFound` condition clears
+in Exercise 3 when the subscription pairing activates.
 
 The model also appears on the shared service surface consumers use:
 
 . In the console, navigate to *Gen AI studio → AI asset endpoints*.
-. On the *Models* tab, locate `redhatainvidia-nemotron-nano-9`. The model row shows a
-*Ready* status with *View* in the *Endpoints* column.
-. Click *View* to open the *Endpoints* dialog. Confirm the dialog shows a *Model
-as a Service* badge and your subscription assignment.
+. On the *Models* tab, locate `publishers/lab-user-dev/models/redhatainvidia-nemotron-nano-9`.
+The row shows *Ready* with *View* in the *Endpoints* column.
+. Click *View* to open the *Endpoints* dialog. The dialog shows a *Model as a
+Service* badge, your subscription, and the external API endpoint URL.
 
 [NOTE]
 ====
@@ -192,123 +165,57 @@ image::302-ai-asset-endpoints.png[AI asset endpoints page with the model showing
 
 .5 minutes
 
-Now that the model is published to the shared gateway, you will configure
-who can consume it and with which credentials.
+Now that the model is published to the shared gateway, you will review who can
+consume it and create the credentials.
 
-Access to the model service is governed by subscription tiers. This environment
-has two tiers, each backed by OpenShift owner groups:
+Access is governed by subscriptions. This environment has one tier,
+provisioned by automation and backed by the group every authenticated user
+belongs to:
 
 [cols="1,2,1,2"]
 |===
 |Subscription |Owner group |Priority |Token rate limits
 
 |`maas-free-subscription`
-|`system:authenticated`
-|10
+|`system:authenticated:oauth`
+|0
 |20,000 tokens/min and 1,000 tokens/sec
-
-|`maas-premium-subscription`
-|`premium-users`
-|20
-|1,000,000 tokens/min and 20,000 tokens/sec
 |===
 
-The priority level decides which subscription is selected when creating an API
-key without specifying one — higher numbers win, so users who belong to both
-groups default to the premium tier. Specifying the subscription explicitly
-bypasses priority selection.
-
-Each tier is provisioned as a `MaaSSubscription` and a matching
-`MaaSAuthPolicy` in the `models-as-a-service` namespace — the only namespace
-the MaaS API reads subscriptions from. Review the free-tier pair:
-
-[source,yaml,subs="specialcharacters,attributes"]
-----
-apiVersion: maas.opendatahub.io/v1alpha1
-kind: MaaSSubscription
-metadata:
-  name: maas-free-subscription
-  namespace: models-as-a-service
-spec:
-  owner:
-    groups:
-      - name: system:authenticated
-  modelRefs:
-    - name: redhatainvidia-nemotron-nano-9
-      namespace: {project-namespace}
-      tokenRateLimits:
-        - limit: 20000
-          window: 1m
-        - limit: 1000
-          window: 1s
-  priority: 10
-----
-
-A matching `MaaSAuthPolicy` binds API-key authentication to the published model
-at the gateway:
-
-[source,yaml,subs="specialcharacters,attributes"]
-----
-apiVersion: maas.opendatahub.io/v1alpha1
-kind: MaaSAuthPolicy
-metadata:
-  name: maas-free-subscription-policy
-  namespace: models-as-a-service
-spec:
-  modelRefs:
-    - name: redhatainvidia-nemotron-nano-9
-      namespace: {project-namespace}
-  subjects:
-    groups:
-      - name: system:authenticated
-----
-
-[IMPORTANT]
-====
-Governance pairing needs an active subscription AND a matching authorization
-policy for the model. The subscription defines the token quota; the
-authorization policy grants gateway access. Without both, requests fail at
-the gateway: HTTP 429 when no subscription quota matches, HTTP 403 when no
-authorization policy grants your group access.
-====
-
-Verify both resources exist:
+The owner group is the group your OpenShift identity presents to the gateway —
+a subscription backed by plain `system:authenticated` never matches, so every
+call is denied with HTTP 403. The subscription and its matching
+`MaaSAuthPolicy` live in the `models-as-a-service` namespace — the only
+namespace the MaaS API reads subscriptions from. Verify both exist:
 
 [source,bash,role="execute"]
 ----
 oc get maassubscription,maasauthpolicy -n models-as-a-service
 ----
 
-[NOTE]
-====
-In this workshop the subscription tiers are pre-provisioned by automation. You
-can create additional subscriptions in the console under *Settings → MaaS
-governance*, or manage them as custom resources through GitOps. A subscription
-must include the model in its `modelRefs` before any group can access it —
-after publishing, an administrator adds the model to a subscription to make it
-accessible to user groups.
-====
+Both report `PHASE` `Active`:
 
-Review your own subscription assignments from the consumer view:
+image::304b-subscriptions-active.png[The subscription and authorization policy Active in the models-as-a-service namespace,link=self,window=blank,width=850]
 
-. Navigate to *Gen AI studio → API keys*. In RHOAI 3.6 this page
-(`/maas/keys-and-subs`) combines API keys and subscriptions — the subscription
-tiers are on the same page rather than a separate tab.
-. Expand a subscription row to see the models it includes, with their token rate
-limits formatted as the number of tokens per time window.
+Review your own subscription from the consumer view:
 
-image::303-maas-subscription-tiers.png[Subscriptions view showing the subscription tiers and token rate limits,link=self,window=blank,width=700]
+. Navigate to *Gen AI studio → API keys*. The page combines API keys and
+subscriptions as tabs.
+. Open the *Subscriptions* tab, then click *Details* on the
+`maas-free-subscription` row. The expanded row lists the model it includes
+with its token rate limits — 20,000 / 1 minute and 1,000 / 1 second.
 
-Create an API key scoped to the premium subscription:
+image::303-maas-subscription-tiers.png[Subscriptions view showing the subscription with its token rate limits,link=self,window=blank,width=700]
 
-. On the *API keys* page, click *Create API key*.
+Create an API key:
+
+. On the *API keys* tab, click *Create API key*.
 . In the *Create API key* dialog, enter `Workshop` in the *Name* field.
-. From the *Subscription* dropdown, select `maas-premium-subscription`. The
-*Models* section displays the included model and its configured token limits —
-1,000,000 tokens/min and 20,000 tokens/sec.
-. From the *Expiration* dropdown, select *30 days*.
-. Click *Create*. The *API key created* dialog displays the generated key with
-a `sk-oai-` prefix.
+. In the *Subscription* field, select `maas-free-subscription`. The key will
+work only with models that belong to the selected subscription.
+. Leave the *Expiration* at its 30 day default (the field accepts 1–365 days).
+. Click *Create*. The dialog displays the generated key with a `sk-oai-`
+prefix.
 
 [IMPORTANT]
 ====
@@ -328,19 +235,20 @@ image::305-api-key-created.png[API key created dialog showing the one-time key d
 Retrieve the external endpoint URL:
 
 . Navigate to *Gen AI studio → AI asset endpoints*.
-. On the *Models* tab, locate `redhatainvidia-nemotron-nano-9` and click *View* in the
-*Endpoints* column.
-. In the *Endpoints* dialog, copy the external API endpoint URL and store it
-with your API key.
+. Click *View* in the *Endpoints* column for your model.
+. In the *Endpoints* dialog, copy the *External API endpoint* URL and store it
+with your API key. The dialog also offers *Generate API key* for short-lived
+keys minted directly from the dialog.
 
-Record both values now — you will use them in Module 4:
+Record both values now — you will use them in Exercise 4 and in Module 4:
 
 [cols="2,3"]
 |===
 |Value |Source
 
 |External API endpoint URL
-|*Endpoints* dialog on the *AI asset endpoints* page (shape: `https://maas.apps.<cluster-domain>/`)
+|*Endpoints* dialog on the *AI asset endpoints* page (shape:
+`https://maas.apps.<cluster-domain>/`)
 
 |API key (`sk-oai-` prefix)
 |Copied from the one-time *API key created* dialog
@@ -349,23 +257,22 @@ Record both values now — you will use them in Module 4:
 [NOTE]
 ====
 Your group membership is captured at API key creation time. If your group
-membership changes after the key is created, the key retains the original group
-associations — revoke the existing key and create a new one to reflect updated
-groups.
+membership changes after the key is created, the key retains the original
+group associations — revoke the existing key and create a new one to reflect
+updated groups.
 ====
 
 == Exercise 4: Configure scaling policies
 
 .5 minutes
 
-Now that you hold a working API key, you will scale the service and confirm
-it is ready for concurrent consumers.
+Now that you hold a working API key, you will scale the service and confirm it
+is ready for concurrent consumers.
 
 Module 1 deployed the model with a single replica — the deployment wizard
-default. One replica serves light, single-team traffic, but a shared endpoint
-with concurrent consumers needs headroom. For production workloads, deploy at
-least 2 replicas so the service survives pod restarts and absorbs concurrent
-requests.
+default. A shared endpoint with concurrent consumers needs headroom: for
+production, deploy at least 2 replicas so the service survives pod restarts
+and absorbs concurrent requests.
 
 Scale the model to two replicas:
 
@@ -375,7 +282,7 @@ oc patch llminferenceservice redhatainvidia-nemotron-nano-9 -n {project-namespac
   -p '{"spec":{"replicas":2}}'
 ----
 
-Wait for the second model pod to come up:
+Watch the second model pod:
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
@@ -385,20 +292,33 @@ oc get pods -n {project-namespace} -w
 Expected output:
 
 ----
-NAME                                            READY   STATUS    RESTARTS   AGE
-redhatainvidia-nemotron-nano-9-kserve-7d9f8b6c5-xr2kp   1/1   Running   0        5m
-redhatainvidia-nemotron-nano-9-kserve-7d9f8b6c5-t4mzn   1/1   Running   0        30s
+NAME                                            READY   STATUS            RESTARTS   AGE
+redhatainvidia-nemotron-nano-9-kserve-6ccdd4bddc-krgvf   2/2   Running           0          5h24m
+redhatainvidia-nemotron-nano-9-kserve-6ccdd4bddc-mk8xd   0/2   SchedulingGated   0          10s
 ----
 
-Pod names vary; press `Ctrl+C` to stop watching once both pods report
-`Running`.
+Pod names vary. In this lab the second pod stays `SchedulingGated`: the GPU
+node carries a single NVIDIA L4 and the Kueue cluster queue's GPU quota is 1,
+so the second replica cannot be admitted. The service keeps serving with the
+original replica — nothing is lost. On a multi-GPU cluster the second pod
+comes up `Running` the same way the first one did.
+
+Scale back to one replica and delete the gated pod's request:
+
+[source,bash,role="execute",subs="specialcharacters,attributes"]
+----
+oc patch llminferenceservice redhatainvidia-nemotron-nano-9 -n {project-namespace} --type merge \
+  -p '{"spec":{"replicas":1}}'
+----
+
+Press `Ctrl+C` to stop watching. The `SchedulingGated` pod is removed and the
+original replica keeps serving.
 
 [NOTE]
 ====
-The scaling configuration set here carries forward to Module 6, where you
-monitor serving behavior under load and connect metrics to scaling decisions.
-Use the premium-tier key (1,000,000 tokens/min) for load generation so the
-subscription limit does not throttle the test.
+The scaling configuration carries forward to Module 6, where you monitor
+serving behavior under load and connect metrics to scaling decisions. The
+token rate limits from Exercise 3 govern load generation there.
 ====
 
 Before testing the endpoint, confirm the model finished MaaS governance
@@ -410,19 +330,14 @@ oc get maasmodelref redhatainvidia-nemotron-nano-9 -n {project-namespace} -o jso
   | jq -r '.status.conditions[] | "\(.type)=\(.status)"'
 ----
 
-Expected output:
+Expected output — all four conditions `True`:
 
-----
-Ready=True
-GovernanceAttached=True
-RuntimeReady=True
-ModelIdentityUnique=True
-----
+image::306b-modelref-conditions.png[The MaaSModelRef status conditions all reporting True,link=self,window=blank,width=800]
 
 `GovernanceAttached` confirms the subscription and authorization policy
-pairing from Exercise 3 is active, `RuntimeReady` confirms the model serving
-runtime is up, and `Ready=True` reports the model phase is `Ready` — the model
-is serving through the MaaS gateway.
+pairing from Exercise 3 is active, `RuntimeReady` confirms the serving runtime
+is up, and `Ready=True` reports the model is published and serving through the
+MaaS gateway.
 
 Verify the endpoint is externally reachable. Set the values you recorded in
 Exercise 3 as environment variables (run these in the same terminal session so
@@ -438,23 +353,10 @@ curl -s "${MAAS_URL}/v1/models" -H "Authorization: Bearer ${MAAS_API_KEY}" | jq 
 The response lists the models accessible through your subscription in
 OpenAI-compatible JSON format:
 
-----
-{
-    "object": "list",
-    "data": [
-      {
-        "id": "publishers/{project-namespace}/models/redhatainvidia-nemotron-nano-9",
-        "object": "model",
-        "created": 1761250000,
-        "owned_by": "{project-namespace}",
-        "ready": true
-      }
-    ]
-}
-----
+image::306c-maas-models.png[The /v1/models response listing the published model with its subscription,link=self,window=blank,width=800]
 
 Export the model ID from the catalog — request bodies must use the full ID
-returned by `/v1/models`:
+returned by `/v1/models` (`publishers/lab-user-dev/models/redhatainvidia-nemotron-nano-9`):
 
 [source,bash,role="execute"]
 ----
@@ -472,45 +374,32 @@ routing — the standard OpenAI-compatible surface:
 curl -s "${MAAS_URL}/v1/chat/completions" \
   -H "Authorization: Bearer ${MAAS_API_KEY}" \
   -H "Content-Type: application/json" \
-  -d "{\"model\":\"${MODEL_ID}\",\"messages\":[{\"role\":\"user\",\"content\":\"What is Model-as-a-Service in one sentence?\"}],\"max_tokens\":100}" \
+  -d "{\"model\":\"${MODEL_ID}\",\"messages\":[{\"role\":\"user\",\"content\":\"What is Model-as-a-Service in one sentence?\"}],\"max_tokens\":150}" \
   | jq .
 ----
 
 A successful response returns HTTP 200 with a completion in OpenAI-compatible
-format:
+format. `Nemotron Nano 9B v2` is a reasoning model: the model thinks before it
+answers, so with a bounded `max_tokens` the response carries the model's
+reasoning in the `reasoning` field, `content` is still `null`, and
+`finish_reason` is `length`:
 
-----
-{
-    "id": "chatcmpl-abc123",
-    "object": "chat.completion",
-    "created": 1761250100,
-    "model": "publishers/{project-namespace}/models/redhatainvidia-nemotron-nano-9",
-    "choices": [
-      {
-        "index": 0,
-        "message": {
-          "role": "assistant",
-          "content": "Model-as-a-Service exposes a model through a governed, externally reachable API gateway..."
-        },
-        "finish_reason": "stop"
-      }
-    ],
-    "usage": {
-      "prompt_tokens": 14,
-      "completion_tokens": 21,
-      "total_tokens": 35
-    }
-}
-----
+image::306d-maas-inference.png[The /v1/chat/completions response with the reasoning field and finish_reason length,link=self,window=blank,width=800]
 
-image::306-maas-inference-test.png[Test inference request through the MaaS endpoint returning a completion,link=self,window=blank,width=700]
+Note the `model` field echoes the short model name, while request bodies use
+the full `publishers/<project>/<model>` ID from the catalog.
+
+Module 4's sample application streams responses — the same endpoint accepts
+`"stream": true` and returns OpenAI-compatible server-sent events.
 
 [NOTE]
 ====
 Troubleshooting: *401 Unauthorized* means the API key is invalid, expired, or
-revoked; *429 Too Many Requests* means the subscription's token limit was
-reached — wait for the token limit window to reset and retry; *403 Forbidden*
-means the authorization policy does not grant your group gateway access.
+revoked — create a new key from the *API keys* page; *429 Too Many Requests*
+means the subscription's token limit was reached — wait for the window to
+reset and retry; *403 Forbidden* means the authorization policy does not grant
+your group gateway access, or the subscription owner group does not match the
+group your identity presents.
 
 Keep request payloads small: the MaaS gateway enforces a 4 MiB request body
 limit (RHOAIENG-99765), so large payloads routed through the gateway — long
@@ -522,14 +411,14 @@ prompts, batched requests, or attached files — must stay below roughly 3.8 MB.
 **What you accomplished:**
 
 * Reviewed the Model-as-a-Service approach and how it differs from direct deployment.
-* Configured the model as a shared service published through the MaaS gateway.
-* Configured access controls and API endpoints, and scaled the model for concurrent consumers.
+* Published the model to the shared gateway with a `MaaSModelRef` and the router patch.
+* Created an API key scoped to the subscription and verified governance pairing.
 
 **Key takeaways:**
 
-* Model-as-a-Service transforms a single-team model deployment into a shared, scalable resource available across the organization.
-* Access controls and API credentials govern who can consume the model service.
-* Scaling policies ensure the service can handle concurrent requests from multiple consumers.
+* Model-as-a-Service transforms a single-team model deployment into a shared, governed resource available across the organization.
+* Subscriptions and authorization policies govern who can consume the model; API keys carry that access.
+* Scaling headroom for a shared endpoint is bounded by cluster GPU quota — Kueue gates replicas the cluster cannot admit.
 * The endpoint URL and API key you recorded here are the handoff to Module 4 — reuse them there without re-deriving.
 
 **Next steps:**

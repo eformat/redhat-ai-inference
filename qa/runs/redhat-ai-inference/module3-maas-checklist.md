@@ -103,19 +103,107 @@ module 2: verify the flow live → rewrite concise → retrofit terminal renders
       only OpenShift identities manage keys there), require-group-membership +
       subscription-valid (MODEL paths only, not /v1/* or /maas-api/*).
 
-## Pending — after Mike commits + syncs
+## Verified — END-TO-END FLOW WORKS (2026-10-27, after the sync + apply)
 
-- [ ] Mike: commit + push 40-kuadrant.yaml (the bindings) + workshop-apps
-      (maas-subscriptions.yaml); ArgoCD syncs rhai-maas (the bindings land);
-      oc apply -k workshop-apps (the subscriptions) — or verify ArgoCD applied
-      them if moved to a chart.
-- [ ] Re-verify: the Authorino SA can create TokenReviews (oc auth can-i);
-      the dashboard API keys page loads; a key created via the dashboard works.
-- [ ] Walk Ex 2 as lab-user1: the LIS router patch to maas-default-gateway +
-      the MaaSModelRef apply — verify the conditions (Ready/GovernanceAttached/
-      RuntimeReady/ModelIdentityUnique) and /v1/models with the key.
-- [ ] Test inference with the key (streaming AND non-streaming — watch the
-      deferred 30s timeout on maas-gateway-route) + the key expiry behavior.
+- [x] RBAC FIX CONFIRMED: both ClusterRoleBindings landed (ArgoCD synced
+      a22a7da after a hard refresh — oc annotate
+      application.argoproj.io/rhai-maas argocd.argoproj.io/refresh=hard), the
+      Authorino SA can create TokenReviews, and the gateway OpenShift-token
+      auth WORKS (GET /v1/models with the lab-user1 token → 200).
+- [x] SUBSCRIPTIONS APPLIED + ACTIVE: MaaSSubscription
+      maas-free-subscription + MaaSAuthPolicy maas-free-subscription-policy
+      (PHASE=Active). NOTE: the FIRST apply was DELETED within ~60s (cause
+      unclear — possibly a race with the MaaSModelRef reconcile); the re-apply
+      survived and has been stable 5m+. If subscriptions vanish on a fresh
+      cluster, re-apply.
+- [x] Ex 2 LEARNER FLOW VERIFIED as lab-user1: (1) oc apply the MaaSModelRef
+      (tenantRef models-as-a-service) → PHASE=Failed with GATEWAY=
+      openshift-ai-inference (the HTTPRoute still on the direct gateway);
+      (2) oc patch the LIS router to maas-default-gateway → PHASE=Pending
+      (BackendNotReady "Awaiting governance pairing", GovernanceAttached=False
+      "NoPairingFound"); (3) after the subscriptions exist → PHASE=Ready, ALL
+      conditions True (Ready/GovernanceAttached/RuntimeReady/
+      ModelIdentityUnique). The page's Ex 2 must present the router patch +
+      the modelRef in the RIGHT ORDER (patch router first or show the Failed
+      progression).
+- [x] KEY CREATION VERIFIED: POST /maas-api/v1/api-keys with the OpenShift
+      token → 201, key sk-oai- prefix, 67 chars. The dashboard Create API key
+      dialog verified: Name + Description + Subscription (typeahead: "Select a
+      subscription to scope this API key to. The key will work only with
+      models that belong to the selected subscription") + Expiration (default
+      30 days, "Must be between 1 and 365, inclusive"). The keys table shows
+      Active + Subscription + Owner + Created/Last used/Expires. The
+      Subscriptions tab: Subscription view | Model view toggle, the expanded
+      row shows the model + "Token limits: 20,000 / 1 minute, 1,000 / 1
+      second".
+- [x] INFERENCE VERIFIED (streaming AND non-streaming): GET /v1/models with
+      the key → the model ready=true, id publishers/lab-user-dev/models/
+      redhatainvidia-nemotron-nano-9, url https://maas.apps.../ (the gateway
+      ROOT — matches the page's endpoint shape). POST /v1/chat/completions →
+      HTTP 200 in 3.4s (well under the 30s router timeout). REAL RESPONSE
+      SHAPE: the response's model field is the SHORT name
+      "redhatainvidia-nemotron-nano-9" (NOT the publisher path — the page's
+      example is WRONG); Nemotron is a REASONING model — with max_tokens 150
+      the content is reasoning-style ("Okay, the user is asking...") and
+      finish_reason=length (chat_template_kwargs enable_thinking:false moves
+      the text to content but the style stays); system_fingerprint
+      vllm-0.28.0+rhaiv.7. Streaming: SSE chunks (delta.reasoning for
+      Nemotron) + "data: [DONE]".
+- [x] Ex 4 SCALE IMPOSSIBLE ON THIS LAB (1 GPU): oc patch replicas 2 → the
+      second pod SchedulingGated (kueue.x-k8s.io/admission + topology gates;
+      the ClusterQueue default nominalQuota nvidia.com/gpu=1, the node has ONE
+      L4 — ip-10-0-16-235). The pod NEVER schedules. Scale back to 1 restores
+      (the gated pod deleted; the modelRef phase dips Unhealthy then Ready).
+      The page's "expected output" (both pods Running) is FICTION for this
+      lab — rewrite honestly: scale → SchedulingGated (the Kueue GPU quota)
+      → scale back to 1.
+- [x] The dashboard flow VERIFIED END-TO-END as lab-user1: Gen AI studio →
+      API keys loads (no more error), both test keys Active with
+      maas-free-subscription, the Subscriptions tab with the token limits,
+      the Create dialog complete.
+
+## DONE — module-03 rewrite complete (2026-10-27)
+
+- [x] PAGE REWRITTEN: content/modules/ROOT/pages/module-03-model-as-a-service.
+      adoc — 432 lines (from 543), 4 exercises, 10 image references (5 live
+      dashboard captures 301-305 + 5 terminal renders 303b/304b/306b/306c/
+      306d), 0 TODOs, Antora 0 errors, secrets clean.
+- [x] TERMINAL RENDERS (the zt-rhaibu pipeline, term.py + playwright #term):
+      303b-modelref-pending (1000x126), 304b-subscriptions-active (1000x189),
+      306b-modelref-conditions (900x168), 306c-maas-models (900x482),
+      306d-maas-inference (900x963) — all the REAL captured outputs (the
+      /v1/models + /v1/chat/completions responses re-captured live; the
+      keyredacted — the command lines templated).
+- [x] DASHBOARD SCREENSHOTS RECAPTURED from THIS cluster (the old ones were
+      from prelude2): 302 (the AI asset endpoints page, the model Ready with
+      View), 303 (the Subscriptions tab expanded with the token limits), 304
+      (the Create dialog filled: Name Workshop + subscription selected), 305
+      (the API key created dialog — the key is MASKED by default sk-oai-••••
+      with a Show button, safe to capture).
+- [x] 306-maas-inference-test.png ORPHANED (the reference removed — the 306d
+      terminal render covers the inference response). Candidate for deletion
+      at commit time (Mike's call).
+- [x] CLEANUP: all test API keys revoked ("Revoke user API keys" in the
+      dashboard — all active keys for lab-user1 revoked) so the learner starts
+      with an empty keys table.
+- [x] KEY PAGE CHANGES vs the old version: the single tier
+      (maas-free-subscription, system:authenticated:oauth — NOT the two-tier
+      free/premium design; premium-users does not exist on this cluster); Ex 2
+      presents the router patch FIRST then the MaaSModelRef (the verified
+      Failed→Pending→Ready progression); Ex 4's scale is honest (the second
+      pod SchedulingGated — the Kueue GPU quota is 1, the node has a single
+      L4 — then scale back to 1); the inference example matches the REAL
+      response (content null + reasoning filled + finish_reason length; the
+      model field echoes the SHORT name); the /v1/models example shows the
+      REAL catalog shape (kind/url/subscriptions fields).
+
+## Environment state left behind
+
+- The MaaSModelRef redhatainvidia-nemotron-nano-9 (lab-user-dev): Ready, all
+  conditions True.
+- The subscription + authpolicy in models-as-a-service: Active.
+- The model's LIS router: attached to maas-default-gateway; replicas back to 1.
+- Zero API keys (all test keys revoked).
 
 
 ## Pending — rewrite module-03 (concise working instructions)
