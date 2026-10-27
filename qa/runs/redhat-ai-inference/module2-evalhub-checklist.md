@@ -240,6 +240,8 @@ placeholder URLs that do not match the 9B deployment. Rebuild: verify → write
       and the learner avoids the deleted-experiment name gotcha entirely. The
       dashboard flow's MLflow experiment step now says "accept the default".
       The gotcha stays as a Troubleshooting item.
+- [x] CLI TLS FIX (2026-10-27, the wetty terminal): `evalhub config set
+      insecure true` added to the Configure the CLI block. ROOT CAUSE: the
       wetty terminal is itself a pod — the evalhub client auto-detects its
       ServiceAccount CA (the rhpds cluster's CA) as the trust bundle
       (`_resolve_ca_bundle`: /var/run/secrets/.../ca.crt) and passes it
