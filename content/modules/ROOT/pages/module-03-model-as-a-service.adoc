@@ -102,7 +102,7 @@ Attach the model's route to the shared MaaS gateway by patching the
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-oc patch llminferenceservice redhatainvidia-nemotron-nano-9 -n {project-namespace} --type merge \
+oc patch llminferenceservice redhatainvidia-nemotron-nano-9 -n {project_namespace} --type merge \
   -p '{"spec":{"router":{"gateway":{"refs":[{"name":"maas-default-gateway","namespace":"openshift-ingress"}],"route":{}}}}}'
 ----
 
@@ -112,14 +112,14 @@ gateway as the route's parent, which is what makes the deployment shared.
 Register the model with MaaS through a `MaaSModelRef` in the model's project
 namespace:
 
-[source,bash,role="execute"]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
 cat <<'EOF' | oc apply -f -
 apiVersion: maas.opendatahub.io/v1alpha1
 kind: MaaSModelRef
 metadata:
   name: redhatainvidia-nemotron-nano-9
-  namespace: lab-user-dev
+  namespace: {project_namespace}
 spec:
   modelRef:
     kind: LLMInferenceService
@@ -132,7 +132,7 @@ Verify the registration:
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-oc get maasmodelref -n {project-namespace}
+oc get maasmodelref -n {project_namespace}
 ----
 
 The `PHASE` column moves through three states as the platform catches up —
@@ -149,7 +149,7 @@ in Exercise 3 when the subscription pairing activates.
 The model also appears on the shared service surface consumers use:
 
 . In the console, navigate to *Gen AI studio → AI asset endpoints*.
-. On the *Models* tab, locate `publishers/lab-user-dev/models/redhatainvidia-nemotron-nano-9`.
+. On the *Models* tab, locate `publishers/{project_namespace}/models/redhatainvidia-nemotron-nano-9`.
 The row shows *Ready* with *View* in the *Endpoints* column.
 . Click *View* to open the *Endpoints* dialog. The dialog shows a *Model as a
 Service* badge, your subscription, and the external API endpoint URL.
@@ -278,7 +278,7 @@ Scale the model to two replicas:
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-oc patch llminferenceservice redhatainvidia-nemotron-nano-9 -n {project-namespace} --type merge \
+oc patch llminferenceservice redhatainvidia-nemotron-nano-9 -n {project_namespace} --type merge \
   -p '{"spec":{"replicas":2}}'
 ----
 
@@ -286,7 +286,7 @@ Watch the second model pod:
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-oc get pods -n {project-namespace} -w
+oc get pods -n {project_namespace} -w
 ----
 
 Expected output:
@@ -307,7 +307,7 @@ Scale back to one replica and delete the gated pod's request:
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-oc patch llminferenceservice redhatainvidia-nemotron-nano-9 -n {project-namespace} --type merge \
+oc patch llminferenceservice redhatainvidia-nemotron-nano-9 -n {project_namespace} --type merge \
   -p '{"spec":{"replicas":1}}'
 ----
 
@@ -326,7 +326,7 @@ pairing — the `MaaSModelRef` status conditions must all report `True`:
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-oc get maasmodelref redhatainvidia-nemotron-nano-9 -n {project-namespace} -o json \
+oc get maasmodelref redhatainvidia-nemotron-nano-9 -n {project_namespace} -o json \
   | jq -r '.status.conditions[] | "\(.type)=\(.status)"'
 ----
 
@@ -345,8 +345,8 @@ the variables remain available):
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-export MAAS_URL="{maas_url}"
-export MAAS_API_KEY="{maas_api_key}"
+export MAAS_URL="{maas_gateway_url}"
+export MAAS_API_KEY="<your sk-oai- API key>"
 curl -s "${MAAS_URL}/v1/models" -H "Authorization: Bearer ${MAAS_API_KEY}" | jq .
 ----
 
@@ -356,7 +356,7 @@ OpenAI-compatible JSON format:
 image::306c-maas-models.png[The /v1/models response listing the published model with its subscription,link=self,window=blank,width=800]
 
 Export the model ID from the catalog — request bodies must use the full ID
-returned by `/v1/models` (`publishers/lab-user-dev/models/redhatainvidia-nemotron-nano-9`):
+returned by `/v1/models` (`publishers/{project_namespace}/models/redhatainvidia-nemotron-nano-9`):
 
 [source,bash,role="execute"]
 ----

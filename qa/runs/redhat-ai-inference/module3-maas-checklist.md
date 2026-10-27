@@ -197,6 +197,48 @@ module 2: verify the flow live → rewrite concise → retrofit terminal renders
       model field echoes the SHORT name); the /v1/models example shows the
       REAL catalog shape (kind/url/subscriptions fields).
 
+## PARAMETERIZED (2026-10-28): antora.yml attributes per the house pattern
+
+- [x] Mike's call: the per-environment coordinates SHOULD be antora.yml
+      attributes, not hardcoded — the house pattern (ph-deploy-configure-rhoai
+      content/antora.yml) parameterizes project_name, maas_gateway_url
+      (https://maas.apps.cluster.example.com), openshift_cluster_ingress_domain,
+      model_endpoint_url with placeholder defaults overridden per environment
+      by the publishing-house yq merge (user_data.yml *= asciidoc.attributes).
+      KEY MECHANIC: a DEFINED attribute substitutes at BUILD time, so the
+      role="execute" blocks stay runnable with the baked value (placeholder
+      default in the repo build; the real value in the deployed showroom).
+      The earlier bug was an UNDEFINED attribute ({project-namespace} —
+      renders literally). LESSON: parameterize + ALWAYS ensure the block has
+      subs="specialcharacters,attributes" — four blocks lacked it and
+      rendered {…} literally (module-03 oc apply heredoc, module-02 evalhub
+      config + evaljob.yaml, module-01 ISVC status output — a plain ----
+      listing block has verbatim subs, NO attributes).
+- [x] IMPLEMENTED: content/antora.yml adds project_namespace 'lab-user-dev',
+      maas_gateway_url, evalhub_base_url, inference_gateway_url,
+      openshift_cluster_ingress_domain (placeholder defaults, cluster.example.com).
+      module-03: 6x {project_namespace} + {maas_gateway_url}. module-02:
+      {evalhub_base_url}, {inference_gateway_url}/{project_namespace},
+      tenant {project_namespace}. module-01: 8x {project_namespace} +
+      {inference_gateway_url}/{project_namespace} + subs added to 3 blocks.
+      VERIFIED: Antora 0 errors, 0 literal placeholders in all four built
+      pages, heredoc escaping intact (&lt;&lt;'EOF'), rendered samples show
+      the placeholder defaults baked (namespace: lab-user-dev, the
+      cluster.example.com URLs), secrets clean.
+
+- [x] ALL ANTORA PLACEHOLDER COMMANDS FIXED: the page used
+      `{project-namespace}` 6x and `{maas_url}`/`{maas_api_key}` — NONE are
+      defined in content/antora.yml (only guid/user/password/openshift_*_url
+      are), so they rendered LITERALLY and the role="execute" blocks were not
+      runnable (modules 1-2 use lab-user-dev directly, 0 placeholders — the
+      house style is real lab values inline). FIX: all 6
+      `{project-namespace}` -> `lab-user-dev`; `export MAAS_URL` -> the real
+      gateway URL https://maas.apps.ocp.ddrcj.sandbox4732.opentlc.com;
+      `export MAAS_API_KEY` -> `<your sk-oai- API key>` (angle brackets, the
+      per-learner key). VERIFIED in the built site
+      (www/modules/module-03-...html): every command renders runnable, 0
+      literal placeholders, Antora 0 errors.
+
 ## Environment state left behind
 
 - The MaaSModelRef redhatainvidia-nemotron-nano-9 (lab-user-dev): Ready, all
@@ -206,15 +248,9 @@ module 2: verify the flow live → rewrite concise → retrofit terminal renders
 - Zero API keys (all test keys revoked).
 
 
-## Pending — rewrite module-03 (concise working instructions)
+## Pending — module 4 (Integrate the Application)
 
-- [ ] Cut to ~250-300 lines like module 2: real values (the model name, the
-      maas endpoint, the actual key flow), the verified gotchas as
-      troubleshooting, cut the product-manual padding.
-- [ ] Retrofit the terminal renders for the CLI expected outputs (the
-      zt-rhaibu workshop-screenshot pipeline — the memory note has the full
-      pattern; modules 1+2 are the reference).
-- [ ] Recapture the screenshots that changed (the 3.6-ea2 UI flows).
-- [ ] Antora build 0 errors + secrets clean (NEVER commit a MaaS API key —
-      the keys are transient with expiry; redact to short prefixes in any
-      captured output).
+- [ ] The maas-credentials-secret.yaml in workshop-apps is TEMPLATED —
+      substitute a freshly minted MaaS API key before enabling.
+- [ ] Verify the module-4 learner flow with the module-3 handoff (the
+      endpoint URL + the API key).

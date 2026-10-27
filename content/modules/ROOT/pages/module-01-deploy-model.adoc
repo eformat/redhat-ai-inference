@@ -100,7 +100,7 @@ it schedules on this node.
 === Project and namespace layout
 
 The model you deploy in this module runs in your own project, named after
-your lab user — for example, `lab-user-dev`. Everything you create in the
+your lab user — for example, `{project_namespace}`. Everything you create in the
 next sections lives in that project:
 
 * The model server deployment and its `LLMInferenceService` resource
@@ -117,7 +117,7 @@ dashboard:
 . In the dashboard left menu, click *Projects*. The Projects page opens
 with no projects listed.
 . Click *Create project*.
-. In the *Name* field, enter `lab-user-dev`.
+. In the *Name* field, enter `{project_namespace}`.
 . Optional: enter a *Description*.
 . Click *Create*. Your project opens in the dashboard.
 
@@ -129,7 +129,7 @@ the *Projects* page and selectable in the deploy wizard later in this
 module.
 ====
 
-image::101-project-layout.png[Projects page showing the lab-user-dev student project,link=self,window=blank,width=700]
+image::101-project-layout.png[Projects page showing the {project_namespace} student project,link=self,window=blank,width=700]
 
 == Exercise 2: Deploy the model for inference
 
@@ -181,7 +181,7 @@ image::101-catalog-model-card.png[Model catalog page for NVIDIA-Nemotron-Nano-9B
 
 . Click *Deploy model*. The Deploy a model wizard opens.
 . In the *Preconfigure deployment* step, select your project
-(`lab-user-dev`) and click *Next*.
+(`{project_namespace}`) and click *Next*.
 . In the *Model details* step, the model location and model type are
 imported from the model catalog and shown read-only. The wizard points the
 deployment at the validated Nemotron Nano 9B v2 FP8-dynamic modelcar — an
@@ -241,9 +241,9 @@ endpoint*), and the model server pod shows *Running* in your project.
 
 Watch the model server pod come up:
 
-[source,role="execute"]
+[source,role="execute",subs="specialcharacters,attributes"]
 ----
-oc project lab-user-dev
+oc project {project_namespace}
 oc get pods -w
 ----
 
@@ -270,13 +270,13 @@ the single-model serving platform (KServe), named after the model from the
 catalog. The resource shown here is the configuration used in this lab, simplified
 for readability:
 
-[source,yaml]
+[source,yaml,subs="specialcharacters,attributes"]
 ----
 apiVersion: serving.kserve.io/v1alpha2
 kind: LLMInferenceService
 metadata:
   name: redhatainvidia-nemotron-nano-9 # <1>
-  namespace: lab-user-dev
+  namespace: {project_namespace}
   annotations:
     opendatahub.io/hardware-profile-name: gpu-serving
   labels:
@@ -388,14 +388,15 @@ NAME                                               READY   STATUS    RESTARTS   
 redhatainvidia-nemotron-nano-9-kserve-6ccdd4bddc-8kp9h  2/2  Running   0          4m
 ----
 
-[source,role="execute"]
+[source,role="execute",subs="specialcharacters,attributes"]
 ----
 oc get llminferenceservice redhatainvidia-nemotron-nano-9
 ----
 
+[subs="specialcharacters,attributes"]
 ----
 NAME                            URL                                                                              READY   AGE
-redhatainvidia-nemotron-nano-9  https://inference-gateway.apps.cluster.example.com/lab-user-dev/redhatainvidia-nemotron-nano-9   True    5m
+redhatainvidia-nemotron-nano-9  {inference_gateway_url}/{project_namespace}/redhatainvidia-nemotron-nano-9   True    5m
 ----
 
 When the `READY` column shows `True`, the model server pod is Running and
@@ -488,7 +489,7 @@ foundation for every module that follows.
 **What you accomplished:**
 
 * Explored the lab environment and confirmed the platform and GPU node were ready.
-* Created your own Data Science project, `lab-user-dev`.
+* Created your own Data Science project, `{project_namespace}`.
 * Deployed the model for inference with the vLLM NVIDIA GPU ServingRuntime for KServe.
 * Verified the deployment and sent a test inference request through the OpenAI-compatible endpoint.
 

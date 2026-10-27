@@ -85,10 +85,10 @@ namespace, and the token is your own OpenShift login token — the lab project
 is registered as an EvalHub tenant, so your user token is all the
 authorization you need:
 
-[source,bash,role="execute"]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-evalhub config set base_url https://evalhub-redhat-ods-applications.apps.ocp.ddrcj.sandbox4732.opentlc.com
-evalhub config set tenant lab-user-dev
+evalhub config set base_url {evalhub_base_url}
+evalhub config set tenant {project_namespace}
 evalhub config set token $(oc whoami -t)
 evalhub config set insecure true
 evalhub health
@@ -285,12 +285,12 @@ The evaluation can be expressed as a YAML file that you version and re-run
 after any change — a new model version, different runtime arguments, or a
 different serving configuration:
 
-[source,yaml]
+[source,yaml,subs="specialcharacters,attributes"]
 ----
 # evaljob.yaml — repeatable evaluation configuration
 name: nemotron-9-baseline
 model:
-  url: https://inference-gateway.apps.ocp.ddrcj.sandbox4732.opentlc.com/lab-user-dev/redhatainvidia-nemotron-nano-9/v1
+  url: {inference_gateway_url}/{project_namespace}/redhatainvidia-nemotron-nano-9/v1
   name: redhatainvidia-nemotron-nano-9
   auth:
     secret_ref: model-auth
