@@ -103,48 +103,87 @@ placeholder URLs that do not match the 9B deployment. Rebuild: verify → write
       prefix (`https://mlflow.redhat-ods-applications.svc.cluster.local:8443/
       mlflow`), lint clean. The sidecar config gets the tenant workspace
       (lab-user-dev) per job already — only the URI was wrong.
-- [ ] Push → sync (`rhai-maas`) → the operator re-renders the evalhub
-      deployment → the pod rolls → re-run the eval → verify `mlflow_run_id`
-      is set and the run appears in the MLflow UI.
-- [ ] Re-test `--experiment <name>` at submission: the server's own
-      experiment-validation call sends NO workspace header ("Workspace context
-      is required") — may still fail even with the URI fixed (a 1.0.2 server
-      gap). If it fails, the docs skip `--experiment` and rely on run-time
-      logging with the default experiment.
+- [x] FIX VERIFIED END-TO-END (2026-10-27): push → sync (`rhai-maas`) → the
+      operator re-rendered the evalhub deployment (new pod with the prefixed
+      URI) → re-ran the eval → **mlflow_run_id =
+      07c04f2a2fcf4bef9708ec31b934fe5a** — the run logged to MLflow and
+      appears in the dashboard's Experiments page (Develop & train →
+      Experiments → `nemotron-9-eval` → Evaluation runs) with the metrics:
+      acc 0.9, acc_stderr 0.0999, acc_norm 0.7, acc_norm_stderr 0.1527,
+      overall_score 0.9.
+- [x] `--experiment <name>` WORKS at submission with the prefixed URI (the
+      earlier "Workspace context is required" was the URI 404ing, not a
+      missing header) — the experiment `nemotron-9-eval` was created and the
+      runs land in it. NOTE: the workspace must be the TENANT namespace —
+      `redhat-ods-applications` does not resolve as a workspace.
+- [x] MLFLOW COMPARISON VIEW UNBLOCKED: the runs are in MLflow → screenshot
+      204 (the comparison view) is captureable. ALSO a good extra screenshot:
+      the dashboard's Experiments page (Experiments → <experiment> →
+      Evaluation runs) showing the runs with metrics — pairs with Exercise 4.
 
-## Pending — screenshots (4)
+## Screenshots — DONE (2026-10-27, all 1600x900 real captures)
 
-- [ ] `201-evaluations-page.png`: the Evaluations page with a completed run
-      visible (works — the stale Pending/Failed test records can be cleared
-      by restarting the evalhub pod, sqlite on the pod resets the records)
-- [ ] `202-start-evaluation-run.png`: the Start evaluation run dialog
-      (benchmarks, name, source) — if the dialog's MLflow experiment selector
-      works, include it; else document around it
-- [ ] `203-evaluation-results.png`: the completed run's results view
-- [ ] `204-run-comparison.png`: GATED on the MLflow fix — the comparison view
-      needs the runs logged to MLflow; verify after the sync, else drop/gate
-      the screenshot and keep Exercise 4's repeatable-config part
+- [x] `201-evaluations-page.png`: the Evaluations page (/evaluation) with the
+      runs list (Running + Complete + Failed — realistic)
+- [x] `202-start-evaluation-run.png`: the filled Start evaluation run form —
+      external endpoint flow (model name + the gateway URL + the auth secret
+      name + "Connection established successfully") + Benchmark parameters
+      expanded with the tokenizer JSON
+- [x] `202b-run-in-progress.png`: the run detail dialog mid-run — "Elapsed
+      time: 1m 16s", the benchmark tree In progress, Stop evaluation
+- [x] `202c-run-events-log.png`: the same dialog's Events log tab
+- [x] `203-evaluation-results.png`: the results view — Result 55%, Arc Easy
+      70% / Truthfulqa Mc1 40% (Pass), the benchmark threshold 25%, the tabs
+      (Overview/Model metrics/System metrics/Traces/Artifacts)
+- [x] `204-run-comparison.png`: the comparison view — "Comparing
+      nemotron-9-baseline and nemotron-9-recheck" with the Parallel
+      Coordinates Plot (the visualization tabs: Scatter/Box/Contour)
+- [x] `205-mlflow-experiments.png`: the dashboard's Experiments page —
+      nemotron-9-baseline → Evaluation runs with the per-benchmark runs and
+      the metric columns (acc, acc_stderr, overall_score, acc_norm)
 
-## Pending — rewrite module-02 (concise working instructions)
+## Findings from the capture pass (2026-10-27)
 
-- [ ] Install step FIRST (the jumphost does NOT ship the CLI):
-      `pip install --user eval-hub-sdk` (requires Python >= 3.11)
-- [ ] CLI config: base_url = the evalhub Route, tenant = lab-user-dev,
-      token = `oc whoami -t` (the tenant label makes this work as lab-user1)
-- [ ] Auth secret step: `oc create secret generic model-auth --from-literal
-      api-key=<model-tester token>` in lab-user-dev
-- [ ] Eval run with the VERIFIED shape: gateway URL from the LIS status,
-      `--model-auth-secret model-auth`, `--param num_examples=10`,
-      `--param tokenizer=nvidia/NVIDIA-Nemotron-Nano-9B-v2`, benchmarks
-      `arc_easy` + `truthfulqa_mc1` (real IDs)
-- [ ] Replace the placeholder URLs ({model-name}, {project-namespace}) with
-      the actual values (module-1 style), or keep attributes but make them
-      resolve to the real lab values
-- [ ] Cut the product-manual padding: the 4-concept table, the provider
-      table, the metrics/latency sections → brief; keep the troubleshooting
-      (the MaaS 4 MiB gateway note) + add the new gotchas (tokenizer param,
-      the stale disk-pressure failure, Pending-forever = the namespace label)
-- [ ] Exercise 4: keep the repeatable YAML config (`evalhub eval run --config
-      evaljob.yaml` — verify the config-file path works), gate/drop the MLflow
-      comparison view pending the fix
-- [ ] Antora build 0 errors + secrets clean on the changed files
+- [x] DASHBOARD FLOW REQUIRES THE TOKENIZER TOO: the dashboard-submitted eval
+      failed with the SAME HF tokenizer error — the "Benchmark parameters"
+      section needs `{"num_examples": 10, "tokenizer": "nvidia/
+      NVIDIA-Nemotron-Nano-9B-v2"}` (both flows, not just the CLI)
+- [x] DELETED-EXPERIMENT NAME GOTCHA: after Mike deleted the MLflow result,
+      re-creating the experiment with the SAME name failed — "experiment
+      nemotron-9-eval is not active after create" (MLflow keeps deleted
+      experiment names). Use a new experiment name (troubleshooting note)
+- [x] THE MODEL DROPDOWN DOES NOT LIST THE DEPLOYED MODEL: the "Choose model"
+      dropdown only shows "Other (External endpoint)" — the deployed 9B model
+      is not listed as an AI asset endpoint. The docs use the external
+      endpoint flow: Model name + the gateway URL + the auth secret name
+      (exactly the verified CLI shape) + "Validate connection"
+- [x] RUNS ARE FAST: 10 examples × 2 benchmarks completes in ~1-2 min
+      (Pending ~30-50s for the pods + ~1 min Running). 50 examples gives a
+      ~3-4 min run — use a larger sample if you want time to explore the
+      in-progress view
+- [x] EVALUATIONS PAGE URL: /evaluation (not /evaluations — direct navigation
+      404s; navigate via Develop & train → Evaluations)
+- [x] COMPARE FLOW: select 2+ completed runs in the list → Compare → select
+      the benchmarks per run → Compare → the comparison view (Parallel
+      Coordinates/Scatter/Box/Contour tabs)
+
+## Pending — rewrite module-02 (DONE — 2026-10-27)
+
+- [x] REWRITTEN: module-02-evaluate-benchmark.adoc 478 → ~300 lines, concise
+      working instructions. Structure: Ex 1 Set up the EvalHub CLI (pip
+      install --user eval-hub-sdk, config base_url/tenant/token + the
+      model-auth secret) → Ex 2 Run a benchmark evaluation (the verified CLI
+      shape: gateway URL, --model-auth-secret, --experiment, --param
+      num_examples=10 + the tokenizer param; monitor; results) → Ex 3 Run an
+      evaluation from the dashboard (the external endpoint flow + the
+      Benchmark parameters tokenizer + the during-run progress + the results
+      view) → Ex 4 Compare runs and make it repeatable (the comparison view +
+      the MLflow experiments page + the evaljob.yaml config with `id:` per
+      benchmark — NOT benchmark_id) + Troubleshooting (the tokenizer param,
+      Pending-forever = the namespace labels, the stale disk-pressure
+      failure, the deleted-experiment name, the MaaS 4 MiB note).
+- [x] All 7 screenshots wired in (201, 202, 202b, 202c, 203, 204, 205) with
+      descriptive alt text, width=700.
+- [x] Antora build 0 errors (exit 0) + secrets clean on the changed files.
+- [ ] Optional polish: the module-02 nav title/overview wording review,
+      ph-check.py if the publishing house runs it.
