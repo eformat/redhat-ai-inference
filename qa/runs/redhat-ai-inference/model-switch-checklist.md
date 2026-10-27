@@ -82,13 +82,23 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
       Internal API endpoint (service-name SNI) does NOT work with a listener
       hostname; the docs use the external hostname (resolves in-cluster via
       the router wildcard, SNI matches) — same shape as the maas gateway
-- [x] 503 finding: the listener hostname ALONE does not create external
-      routing — the router has no backend for the host and the *.apps URL
-      returns 503. FIXED: the inference-gateway-status Job now also creates
-      `inference-gateway-route` (passthrough of the maas-gateway-route
-      pattern: reencrypt + Redirect, host patched live from ingress.config,
-      ClusterRole extended with routes create/patch). Pending: push → sync →
-      Job re-run → verify the external URL resolves
+- [x] 503 ROOT CAUSE (final): the listener hostname and the reencrypt Route
+      are incompatible — the router's reencrypt backend sends
+      SNI = the Service name (`verifyhost` in the generated haproxy config),
+      but a listener hostname makes the gateway accept ONLY that hostname's
+      SNI → the gateway resets the router's backend connection → 503
+      ("Application is not available" page). Verified: no-SNI → reset,
+      service-name SNI → reset, external-hostname SNI → 200.
+- [x] FIXED with the full maas-gateway pattern: the Job NO LONGER patches the
+      listener hostname (the chart Gateway has no hostname — ArgoCD's
+      re-apply clears any stale one); it patches the Service status with the
+      external hostname (reflected into gateway.status.addresses, which the
+      KServe URL and the endpoints dialog derive from) and creates the Route.
+      ClusterRole: gateways patch dropped, services/services-status added.
+- [ ] Pending: push → sync (the chart re-apply clears the stale listener
+      hostname; the Job re-runs the Service status patch + Route) → verify
+      gateway.status.addresses shows the external hostname → the LIS URL
+      updates → the docs' curl works end-to-end
 - [x] Exercise 3 split into 3 CLI steps: MODEL_URL from
       `oc get llminferenceservice -o jsonpath='{.status.url}'`, TOKEN from the
       deployment's `model-tester-<model>-sa` secret (base64 -d), then the curl —

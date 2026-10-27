@@ -98,6 +98,11 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "3"
 rules:
+  # Read-only gateway get for the Job's wait loop.
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways"]
+    resourceNames: ["openshift-ai-inference"]
+    verbs: ["get"]
   - apiGroups: [""]
     resources: ["services", "services/status"]
     resourceNames: ["openshift-ai-inference-openshift-ai-inference"]
