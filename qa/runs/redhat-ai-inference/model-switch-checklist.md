@@ -103,10 +103,20 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
       cloud provider also provisions a real LB address; the Job's status
       patch then sets the Route hostname. reference:
       ph-deploy-configure-rhoai/manifests/05-maas/gateway/{clusterip,loadbalancer}/
-- [ ] Pending: push → sync → the controller reconciles the Service to
-      LoadBalancer → the Job's status patch wires the external hostname into
-      gateway.status.addresses → the LIS URL updates → verify the docs' curl
-      end-to-end
+- [x] VERIFIED END-TO-END: Service type LoadBalancer with the status hostname,
+      gateway.status.addresses = the external hostname, the LIS URL = the
+      external hostname, and the EXACT docs flow works via DNS (router →
+      route → gateway → model): finish: stop, reasoning separated. The
+      Endpoints dialog shows the correct external URL.
+- [x] NOTES on the landing sequence: (1) the app's ignoreDifferences
+      blanket-ignores ConfigMap /data, so the chart's ConfigMap change never
+      applied in-cluster — the Job's spec.type patch is the self-healing
+      workaround (fresh clusters: the controller renders ClusterIP, the Job
+      fixes it). (2) sync operations kept terminating at ~2.5 min because
+      ArgoCD waits on operator Subscriptions' health in the early waves —
+      the hook Job never ran; a manual sync via the Application CR's
+      operation field ran it to completion.
+- [x] Endpoint screenshot recaptured with the correct external URL
 - [x] Exercise 3 split into 3 CLI steps: MODEL_URL from
       `oc get llminferenceservice -o jsonpath='{.status.url}'`, TOKEN from the
       deployment's `model-tester-<model>-sa` secret (base64 -d), then the curl —
