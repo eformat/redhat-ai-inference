@@ -82,6 +82,20 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
       Internal API endpoint (service-name SNI) does NOT work with a listener
       hostname; the docs use the external hostname (resolves in-cluster via
       the router wildcard, SNI matches) — same shape as the maas gateway
+- [x] 503 finding: the listener hostname ALONE does not create external
+      routing — the router has no backend for the host and the *.apps URL
+      returns 503. FIXED: the inference-gateway-status Job now also creates
+      `inference-gateway-route` (passthrough of the maas-gateway-route
+      pattern: reencrypt + Redirect, host patched live from ingress.config,
+      ClusterRole extended with routes create/patch). Pending: push → sync →
+      Job re-run → verify the external URL resolves
+- [x] Exercise 3 split into 3 CLI steps: MODEL_URL from
+      `oc get llminferenceservice -o jsonpath='{.status.url}'`, TOKEN from the
+      deployment's `model-tester-<model>-sa` secret (base64 -d), then the curl —
+      verified end-to-end (the UI token works; finish: stop, reasoning
+      separated)
+- [x] New screenshot `101-token-secret.png` (1600x900): the deployment row's
+      Token authentication section with the token name + revealed secret
 
 
 ## Pending — images + docs (needs the model sorted first)

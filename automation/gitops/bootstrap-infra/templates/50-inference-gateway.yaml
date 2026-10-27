@@ -106,6 +106,13 @@ rules:
     resources: ["ingresses"]
     resourceNames: ["cluster"]
     verbs: ["get"]
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes"]
+    resourceNames: ["inference-gateway-route"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes"]
+    verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -124,8 +131,9 @@ subjects:
 ---
 # Patches the gateway's https listener hostname with the external hostname
 # (inference-gateway.<apps-domain>, e.g. inference-gateway.apps.<cluster-domain>),
-# so the KServe controller's managed HTTPRoute — which carries no hostname —
-# resolves to an external URL and the model gets a *.apps route.
+# and creates the external Route fronting the gateway Service, so the KServe
+# controller's managed HTTPRoute — which carries no hostname — resolves to an
+# external URL and the model gets a reachable *.apps route.
 #
 # WHY A JOB AND NOT A MANIFEST: the hostname is cluster-specific — a static
 # chart listener would need the apps domain value in git; the Job reads the
@@ -176,3 +184,29 @@ spec:
               # resolves to an external URL on this host.
               oc -n openshift-ingress patch gateway openshift-ai-inference --type=merge -p "{\"spec\":{\"listeners\":[{\"name\":\"https\",\"port\":443,\"protocol\":\"HTTPS\",\"allowedRoutes\":{\"namespaces\":{\"from\":\"All\"}},\"hostname\":\"${HOST}\",\"tls\":{\"mode\":\"Terminate\",\"certificateRefs\":[{\"group\":\"\",\"kind\":\"Secret\",\"name\":\"openshift-ai-inference-service-tls\"}]}}]}}"
               echo "gateway listener hostname patched with ${HOST}"
+              # External Route fronting the gateway Service (created here, not
+              # in the chart: the host is cluster-specific — the maas-gateway
+              # pattern). Without it the router has no backend for the
+              # listener hostname and the external URL returns 503.
+              # oc apply is idempotent and updates the host if the domain
+              # ever changes.
+              cat <<ROUTE | oc -n openshift-ingress apply -f -
+              apiVersion: route.openshift.io/v1
+              kind: Route
+              metadata:
+                name: inference-gateway-route
+                labels:
+                  gateway.networking.k8s.io/gateway-name: openshift-ai-inference
+              spec:
+                host: "${HOST}"
+                to:
+                  kind: Service
+                  name: openshift-ai-inference-openshift-ai-inference
+                  weight: 100
+                port:
+                  targetPort: https
+                tls:
+                  termination: reencrypt
+                  insecureEdgeTerminationPolicy: Redirect
+              ROUTE
+              echo "Route inference-gateway-route applied with host ${HOST}"

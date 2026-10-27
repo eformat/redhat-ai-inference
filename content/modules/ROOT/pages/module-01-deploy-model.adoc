@@ -267,12 +267,7 @@ image::101-deployment-status.png[AI asset endpoints page showing the deployed mo
 
 Behind the scenes, the wizard creates an `LLMInferenceService` resource on
 the single-model serving platform (KServe), named after the model from the
-catalog. The hardware profile you selected (`GPU serving (NVIDIA GPU)`)
-provides the CPU, memory, and GPU resource baseline, the accelerator
-configuration you selected (`vLLM NVIDIA GPU Single Node`) contributes
-the GPU node toleration, and any custom runtime arguments you added in the
-Advanced settings appear as the `VLLM_ADDITIONAL_ARGS` environment variable.
-The resource shown here is the configuration used in this lab, simplified
+catalog. The resource shown here is the configuration used in this lab, simplified
 for readability:
 
 [source,yaml]
@@ -280,34 +275,34 @@ for readability:
 apiVersion: serving.kserve.io/v1alpha2
 kind: LLMInferenceService
 metadata:
-  name: redhatainvidia-nemotron-nano-9
+  name: redhatainvidia-nemotron-nano-9 # <1>
   namespace: lab-user-dev
   annotations:
     opendatahub.io/hardware-profile-name: gpu-serving
   labels:
-    kueue.x-k8s.io/queue-name: default
+    kueue.x-k8s.io/queue-name: default # <2>
     opendatahub.io/dashboard: "true"
     opendatahub.io/genai-asset: "true"
 spec:
   baseRefs:
-    - name: redhatainvidia-nemotron-nano-9
+    - name: redhatainvidia-nemotron-nano-9 # <3>
   model:
     name: redhatainvidia-nemotron-nano-9
-    uri: oci://registry.redhat.io/rhelai1/modelcar-nvidia-nemotron-nano-9b-v2-fp8-dynamic:1.5
-  replicas: 1
+    uri: oci://registry.redhat.io/rhelai1/modelcar-nvidia-nemotron-nano-9b-v2-fp8-dynamic:1.5 # <4>
+  replicas: 1 # <5>
   router:
-    gateway: {}
+    gateway: {} # <6>
     route: {}
   template:
     containers:
       - name: main
         env:
-          - name: VLLM_ADDITIONAL_ARGS
+          - name: VLLM_ADDITIONAL_ARGS # <7>
             value: >-
               --trust-remote-code
               --max-model-len=131072
               --reasoning-parser nemotron_v3
-        resources:
+        resources: # <8>
           requests:
             cpu: "2"
             memory: 16Gi
@@ -317,6 +312,31 @@ spec:
             memory: 16Gi
             nvidia.com/gpu: "1"
 ----
+
+<1> *Model-derived name* -- The wizard names the service after the model from
+the catalog, truncated to fit Kubernetes naming rules.
+<2> *Kueue queue* -- Places the deployment in the project's Kueue queue, so the
+model server is scheduled within the cluster's GPU quota.
+<3> *Accelerator configuration reference* -- Points at the
+`LLMInferenceServiceConfig` the wizard created from the accelerator
+configuration you selected (shown below).
+<4> *Modelcar URI* -- The validated model ships as an OCI image; the serving
+engine loads the weights directly from the image filesystem.
+<5> *Replica* -- One model server replica, holding one GPU. Scaling replicas
+out for shared consumption is covered in Module 3.
+<6> *Gateway routing* -- The KServe controller attaches the model's HTTPRoute
+to the `openshift-ai-inference` gateway, which terminates TLS and serves the
+model's route over HTTPS.
+<7> *Runtime arguments* -- The custom arguments you added in Advanced settings,
+passed to vLLM through the `VLLM_ADDITIONAL_ARGS` environment variable.
+`--trust-remote-code` allows the model's custom code (Mamba-hybrid
+architecture); `--max-model-len=131072` sets a 131,072-token context window;
+`--reasoning-parser nemotron_v3` separates the model's thinking from its final
+answer in API responses — the parser is built into the vLLM image, so no
+plugin is needed.
+<8> *Resource baseline* -- Requests and limits from the GPU serving hardware
+profile: 2 CPU, 16 Gi memory, and 1 GPU, sized for the Nemotron model on a
+single NVIDIA GPU node.
 
 The `baseRefs` entry points at an `LLMInferenceServiceConfig` the wizard
 creates alongside the service — it carries the GPU node toleration from the
@@ -332,56 +352,14 @@ spec:
   template:
     tolerations:
       - effect: NoSchedule
-        key: nvidia.com/gpu
+        key: nvidia.com/gpu # <1>
         operator: Equal
         value: l4-gpu
 ----
 
-[[resource-config]]
-.Model server configuration explained
-[cols="1,2", options="header"]
-|===
-| Field | Purpose
-
-| `spec.model.uri`
-| Points to the validated Nemotron Nano 9B v2 FP8-dynamic modelcar. The model
-ships as a container image, so the serving engine loads it directly from
-the image filesystem instead of downloading from remote object storage.
-
-| `spec.baseRefs`
-| References the `LLMInferenceServiceConfig` the wizard created from the
-accelerator configuration — it contributes the GPU node toleration to the
-serving pod.
-
-| `spec.replicas`
-| One model server replica, holding one GPU. Scaling replicas out for
-shared consumption is covered in Module 3.
-
-| `router`
-| The KServe controller attaches the model's HTTPRoute to the
-`openshift-ai-inference` gateway in the `openshift-ingress` project. The
-gateway terminates TLS and serves the model's external route over HTTPS.
-
-| `spec.template.containers.resources`
-| Requests and limits of 2 CPU / 16 Gi memory / 1 GPU, from the GPU serving
-hardware profile — sized for the Nemotron model on a single NVIDIA GPU node.
-
-| `kueue.x-k8s.io/queue-name: default`
-| Places the deployment in the project's Kueue queue for admission, so the
-model server is scheduled within the cluster's GPU quota.
-
-| custom runtime arguments (`VLLM_ADDITIONAL_ARGS`)
-| Passed to vLLM through the `VLLM_ADDITIONAL_ARGS` environment variable.
-`--trust-remote-code` allows the model's custom code (Mamba-hybrid
-architecture); `--max-model-len=131072` sets a 131,072-token context window;
-`--reasoning-parser nemotron_v3` separates the model's thinking from its final
-answer in API responses — the parser is built into the vLLM image, so no
-plugin is needed.
-
-| tolerations (via `baseRefs`)
-| Lets the pod schedule on the GPU node, which is tainted
-`nvidia.com/gpu=l4-gpu:NoSchedule`.
-|===
+<1> *GPU node toleration* -- Lets the model server pod schedule on the GPU
+node, which is tainted `nvidia.com/gpu=l4-gpu:NoSchedule` by the NVIDIA GPU
+operator.
 
 [IMPORTANT]
 ====
@@ -432,10 +410,15 @@ Copy the endpoint URL.
 
 image::101-inference-endpoint.png[Endpoints dialog showing the external and internal API endpoint URLs for the model,link=self,window=blank,width=700]
 
-. To authenticate requests, mint a token for the service account you named
-in *Require token authentication* by running `oc create token model-tester`,
-and save the output. (Module 3 mints a subscription-scoped MaaS API key
-instead, with the same `Authorization: Bearer` header pattern.)
+. To authenticate requests, copy the token displayed on the model page: open
+*AI hub → Models → Deployments*, expand the model deployment row, and locate
+the *Token authentication* section. Copy the *Token secret* shown for the
+`model-tester` token name and save it. The deployment creates the token with
+the service account you named in *Require token authentication*.
+(Module 3 mints a subscription-scoped MaaS API key instead, with the same
+`Authorization: Bearer` header pattern.)
+
+image::101-token-secret.png[Token authentication section on the model deployment page showing the token name and token secret with the copy button,link=self,window=blank,width=700]
 
 === Send a test inference request
 
@@ -444,13 +427,26 @@ serves the `/v1/chat/completions` path. The model serving platform serves
 API requests over the HTTPS port of the inference gateway (usually
 port 443).
 
-Store the endpoint and token as shell variables, then send a chat request:
+Store the endpoint and token as shell variables, then send a chat request.
+First, the endpoint URL from the `LLMInferenceService`:
 
 [source,bash,role="execute"]
 ----
-MODEL_URL=https://inference-gateway.apps.cluster.example.com/lab-user-dev/redhatainvidia-nemotron-nano-9
-TOKEN=paste-your-token-secret-here
+MODEL_URL=$(oc get llminferenceservice redhatainvidia-nemotron-nano-9 -o jsonpath='{.status.url}')
+echo $MODEL_URL
+----
 
+Then the token from the service account secret the deployment created:
+
+[source,bash,role="execute"]
+----
+TOKEN=$(oc get secret model-tester-redhatainvidia-nemotron-nano-9-sa -o jsonpath='{.data.token}' | base64 -d)
+----
+
+Finally, send a chat request:
+
+[source,bash,role="execute"]
+----
 curl -s $MODEL_URL/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
