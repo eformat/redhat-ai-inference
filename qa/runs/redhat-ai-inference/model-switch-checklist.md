@@ -44,11 +44,18 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
 
 - [ ] Push chart changes: accelerator config rename + inference-gateway-status
       Job (74 resources, lint clean)
-- [ ] After sync: old `vllm-nvidia-l40s-gpu-single-node` config pruned
-- [ ] After sync: hostname Job re-runs → Gateway listener hostname patched →
-      external URL `https://inference-gateway.apps.<domain>/...` resolves
-- [ ] Verify the model's external endpoint from the dashboard
-      (Deployments → Internal and external endpoint)
+- [x] Chart pushed and synced: ArgoCD `bootstrap` app Synced/Healthy at the
+      commit carrying the rename + Job; old `vllm-nvidia-l40s-gpu-single-node`
+      config pruned; `vllm-nvidia-gpu-single-node` in place
+- [x] Hostname Job ran (Complete) and patched the Gateway listener hostname
+- [x] FIXED: the first run produced a double-apps hostname
+      (`inference-gateway.apps.apps.<cluster-domain>`) — the ingress.config
+      domain ALREADY includes the `apps` prefix; the Job script now builds
+      `inference-gateway.${DOMAIN}` (the maas-gateway precedent, same
+      convention). Pending: push → sync → Job re-run → verify the hostname and
+      the external URL resolves
+- [ ] Verify the external URL `https://inference-gateway.apps.<cluster-domain>/...`
+      resolves (curl + the dashboard's Deployments → Internal and external endpoint)
 
 ## Pending — images + docs (needs the model sorted first)
 

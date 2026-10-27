@@ -123,18 +123,19 @@ subjects:
     namespace: redhat-ods-applications
 ---
 # Patches the gateway's https listener hostname with the external hostname
-# (inference-gateway.apps.<domain>), so the KServe controller's managed
-# HTTPRoute — which carries no hostname — resolves to an external URL and
-# the model gets a *.apps route.
+# (inference-gateway.<apps-domain>, e.g. inference-gateway.apps.<cluster-domain>),
+# so the KServe controller's managed HTTPRoute — which carries no hostname —
+# resolves to an external URL and the model gets a *.apps route.
 #
 # WHY A JOB AND NOT A MANIFEST: the hostname is cluster-specific — a static
 # chart listener would need the apps domain value in git; the Job reads the
 # domain live from ingress.config/cluster instead, so the chart is portable
-# across repos/clusters (the maas-gateway-status precedent). ArgoCD does not
-# track hook-created resources; BeforeHookCreation re-runs the Job on every
-# sync, and the Job re-applies the hostname after each chart re-apply (the
-# chart's Gateway has no hostname, so the sync briefly clears it — the Job
-# at wave 3, after the Gateway at wave 2, restores it).
+# across repos/clusters (the maas-gateway-status precedent, same domain
+# convention: the ingress.config value already carries the "apps" prefix).
+# ArgoCD does not track hook-created resources; BeforeHookCreation re-runs
+# the Job on every sync, and the Job re-applies the hostname after each chart
+# re-apply (the chart's Gateway has no hostname, so the sync briefly clears
+# it — the Job at wave 3, after the Gateway at wave 2, restores it).
 #
 # Idempotent (same values); BeforeHookCreation re-runs on every sync.
 apiVersion: batch/v1
@@ -162,8 +163,11 @@ spec:
               set -euo pipefail
               # Apps domain read live from the cluster — the chart carries no
               # cluster-specific values (portable across repos/clusters).
+              # NOTE: the ingress.config domain ALREADY includes the "apps"
+              # prefix (e.g. apps.<cluster-domain>), so the hostname is
+              # inference-gateway.<domain> — no extra "apps." segment.
               DOMAIN="$(oc get ingress.config cluster -o jsonpath='{.spec.domain}')"
-              HOST="inference-gateway.apps.${DOMAIN}"
+              HOST="inference-gateway.${DOMAIN}"
               until oc -n openshift-ingress get gateway openshift-ai-inference >/dev/null 2>&1; do
                 echo "waiting for the gateway"; sleep 10
               done
