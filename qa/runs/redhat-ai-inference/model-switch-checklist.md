@@ -192,10 +192,77 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
       `inference-gateway-route` in
       `automation/gitops/model-serving/templates/50-inference-gateway.yaml`
       (lint clean, 9 resources).
-- [ ] Push → sync (`rhai-model-serving`) → the hook Job re-runs
-      (BeforeHookCreation) → the Route gets the annotation → re-verify a
-      non-streaming curl through the external URL.
+- [x] Push → sync → the Route gets the annotation → VERIFIED (2026-10-27):
+      `timeout: 300s` on `inference-gateway-route`, non-streaming curl through
+      the external URL works (finish: stop).
+      GOTCHA: pushing a HOOK-ONLY change does not trigger the automated sync —
+      hook resources are excluded from the diff, so the app stays "Synced" and
+      auto-sync never fires (the Job re-ran at 05:42 from the PREVIOUS commit,
+      `route unchanged`). Needed a manual sync via the Application CR
+      `operation` field pinned to the pushed revision → Job re-ran →
+      `route configured`.
 - [ ] Optional: same annotation on `maas-gateway-route` (45-maas-gateway.yaml)
       — module 4's MaaS playground streams so it's safe, but a non-streaming
       curl against the MaaS gateway would hit the same 30s limit. Deviates
       from the ph-deploy-configure-rhoai pool pattern — Mike's call.
+
+## Open — module 2 (EvalHub) verify pass (2026-10-27)
+
+Environment + flow findings, all verified live on the app-of-apps cluster:
+
+- [x] VERSIONS: RHOAI 3.6-ea2 ships EvalHub server **1.0.2**
+      (`odh-eval-hub-rhel9` image label `org.opencontainers.image.version:
+      1.0.2`, `version: v3.6.0-ea.2`); workstation CLI = `eval-hub-sdk` 1.0.5
+      (PyPI latest 1.0.6) — forward-versioned client vs the 1.0.2 server,
+      backward compatible, verified working end-to-end. The trustyai module
+      runs INSIDE the RHOAI operator (no separate CSV) in 3.6-ea2.
+- [x] TENANT LABEL (Mike's suggestion — saves all per-resource RBAC):
+      `evalhub.trustyai.opendatahub.io/tenant: "true"` on `lab-user-dev`
+      makes the evalhub CLI work as **lab-user1** with `--token $(oc whoami
+      -t)`. The proxy-access Role (bound to system:authenticated) grants
+      evalhubs/proxy; the service authorizes tenant namespaces via the label.
+      WITHOUT it lab-user1 403s (partial LMEval legacy RBAC only: evalhubs
+      list + lmevaljobs create; providers/evaluations denied). Label added to
+      `workshop-apps/namespace-labels.yaml` + applied live.
+- [x] REVERTED: the ClusterRoleBinding rhods-admins → aggregate-evalhub-
+      permissions I added to the maas chart — unnecessary with the tenant
+      label (aggregate role only aggregates into OpenShift admin, which
+      lab-user1 does not have — custom data-science-admingroupcluster-role).
+- [x] EVALHUB ENDPOINT: Route `evalhub-redhat-ods-applications.apps.<domain>`
+      (the service itself: evalhub.redhat-ods-applications.svc:8443);
+      `evalhub config set base_url https://evalhub-redhat-ods-applications
+      .apps.<domain>` + `config set tenant lab-user-dev`.
+- [x] MODEL AUTH: the eval runs against the gateway URL (same as module 1's
+      Exercise 3 — the external hostname resolves in-cluster, valid cert that
+      chains to the pod's SA ca.crt, so NO TLS config needed) with a secret
+      `--model-auth-secret` carrying key `api-key` = the model-tester token.
+      The job's sidecar proxy resolves the auth ref. Students CAN create
+      secrets in lab-user-dev (their project).
+- [x] TOKENIZER GOTCHA: the lm_evaluation_harness adapter runs
+      local-completions via the sidecar proxy correctly, but loads the
+      TOKENIZER from HuggingFace by model name — `redhatainvidia-nemotron-
+      nano-9` is not an HF ID → job fails with "not a valid model identifier
+      listed on huggingface.co". Fix: `--param tokenizer=nvidia/
+      NVIDIA-Nemotron-Nano-9B-v2` (the modelcar's HF tokenizer).
+- [x] BENCHMARK IDS: the docs' `mmlu`/`hellaswag` IDs DO NOT EXIST in this
+      build (191 benchmarks; variants like cmmlu_*, global_mmlu_full_*,
+      darijahellaswag). Verified English quick picks: `arc_easy` (reasoning,
+      acc/acc_norm), `truthfulqa_mc1` (safety, acc),
+      `global_mmlu_full_en_high_school_mathematics` (math, exact_match/acc).
+- [x] JOB RUNS IN THE STUDENT'S PROJECT: eval pods (one K8s Job per
+      benchmark, adapter + sidecar proxy) run in lab-user-dev with the
+      evalhub job ID prefixed — visible via `oc get jobs -n lab-user-dev`.
+- [x] DISK-PRESSURE GOTCHA: the worker node hit DiskPressure (image pulls:
+      vLLM ~20 GB + modelcar 11.6 GB + the eval job image) → the eval pods
+      went Pending (untolerated taints: worker disk-pressure + GPU node's
+      nvidia.com/gpu) AND the evalhub service marked the job FAILED with a
+      stale "pod unschedulable" even though the pods scheduled and ran after
+      the GC cleared the taint. Re-run clean on a healthy node.
+- [ ] Verify a full eval completes + results (arc_easy + truthfulqa_mc1,
+      num_examples 10) — IN PROGRESS, job bc375247-98dd-4a89-8291-4147b1a29651.
+- [ ] Verify the dashboard Evaluations page renders (was an error state on
+      prelude2; EvalHub is Ready here) + the Start evaluation run dialog +
+      results view + MLflow comparison view (screenshots 201-204).
+- [ ] Rewrite module-02 concise: actual values (model name, project,
+      endpoints), real benchmark IDs, the verified CLI flow (whoami -t +
+      tenant label + auth secret + tokenizer param), dashboard/CLI split.

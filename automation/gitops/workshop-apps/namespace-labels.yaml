@@ -9,3 +9,16 @@ metadata:
     kubernetes.io/metadata.name: lab-user-dev
     pod-security.kubernetes.io/audit: baseline
     pod-security.kubernetes.io/warn: baseline
+    # Module 2 — marks the lab project as an EvalHub tenant namespace: the
+    # EvalHub service authorizes job submission for tenant namespaces via this
+    # label (TokenReview + SubjectAccessReview via evalhubs/proxy, which
+    # evalhub-proxy-access grants to system:authenticated), so the evalhub CLI
+    # works as lab-user1 without per-resource RBAC (providers/evaluations).
+    evalhub.trustyai.opendatahub.io/tenant: "true"
+    # Module 2 — the redhat-ods-applications namespace-wide default-deny
+    # ingress policy only allows from namespaces labeled
+    # opendatahub.io/generated-namespace=true (dashboard-created projects).
+    # Without this label the eval job pods' status-event POSTs to the EvalHub
+    # service time out (context deadline exceeded) and the run stays Pending
+    # forever in the dashboard even though the benchmarks completed.
+    opendatahub.io/generated-namespace: "true"
