@@ -68,7 +68,7 @@
         )
 
     # -- Check 3: GPU worker node --------------------------------------------
-    # Module 1 schedules the model server on the NVIDIA L40S 48 GB GPU node
+    # Module 1 schedules the model server on the NVIDIA L4 24 GB GPU node
     # (`oc get nodes -L nvidia.com/gpu.product`). At least one node must
     # advertise nvidia.com/gpu capacity greater than zero.
     - name: GPU worker node advertises NVIDIA GPU capacity

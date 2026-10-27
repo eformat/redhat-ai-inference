@@ -277,8 +277,8 @@ Endpoint*.
 [source,json,subs="specialcharacters,attributes"]
 ----
 {
-  "id": "publishers/{project-namespace}/models/nemotron-3-nano-30b-a3b",
-  "name": "Nemotron 3 Nano 30B A3B",
+  "id": "publishers/{project-namespace}/models/redhatainvidia-nemotron-nano-9",
+  "name": "Nemotron Nano 9B v2",
   "url": "{maas_url}/v1",
   "toolCalling": true,
   "vision": false,
@@ -470,8 +470,8 @@ If you registered the model with VS Code Chat in Exercise 2, the same
 endpoint now powers your AI assistant:
 
 . Open the AI chat panel in VS Code (focus the editor, then press
-`Ctrl+Alt+I` on Linux or `Cmd+Ctrl+I` on Mac), select *Nemotron 3 Nano 30B
-A3B* — the model you registered — and switch the chat to *Ask* mode.
+`Ctrl+Alt+I` on Linux or `Cmd+Ctrl+I` on Mac), select *Nemotron Nano 9B
+v2* — the model you registered — and switch the chat to *Ask* mode.
 . Highlight a few lines of `maas_chat_client.py` in the editor. The selection
 appears as a context chip on the chat input. Right-click the selection and
 choose *Explain*, or ask directly: `Explain what this code does`.

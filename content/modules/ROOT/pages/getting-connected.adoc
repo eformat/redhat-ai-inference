@@ -51,7 +51,7 @@ installed and configured for this workshop:
 * *Your own project* — you work in your assigned project (namespace)
   throughout the workshop; other attendees cannot see or modify your
   resources.
-* *GPU worker node* — an NVIDIA L40S (48 GB) GPU worker node is attached to
+* *GPU worker node* — an NVIDIA L4 (24 GB) GPU worker node is attached to
   the cluster and schedulable for model serving workloads.
 * *No models pre-deployed* — the environment starts empty; you build the
   full serving lifecycle from scratch across the six modules.
