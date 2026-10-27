@@ -185,5 +185,11 @@ placeholder URLs that do not match the 9B deployment. Rebuild: verify → write
 - [x] All 7 screenshots wired in (201, 202, 202b, 202c, 203, 204, 205) with
       descriptive alt text, width=700.
 - [x] Antora build 0 errors (exit 0) + secrets clean on the changed files.
+- [x] INSTALL INSTRUCTIONS BULLETPROOFED (2026-10-27, Mike hit `evalhub:
+      command not found` on the jumphost): the install step now covers the
+      Python version check, `pip3 install --user eval-hub-sdk`, the
+      `~/.local/bin` PATH export (the #1 gotcha — the installer drops the
+      binary off-PATH), and the venv fallback for
+      `externally-managed-environment` (RHEL images refuse bare pip installs).
 - [ ] Optional polish: the module-02 nav title/overview wording review,
       ph-check.py if the publishing house runs it.

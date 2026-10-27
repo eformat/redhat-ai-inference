@@ -37,13 +37,38 @@ The lab's jumphost does not ship the CLI, so install it first.
 
 === Install the EvalHub CLI
 
+The lab's jumphost does not ship the CLI, so install it first. The CLI
+requires Python 3.11 or later:
+
 [source,bash,role="execute"]
 ----
-pip install --user eval-hub-sdk
+python3 --version
+pip3 install --user eval-hub-sdk
+----
+
+The installer drops the `evalhub` binary in `~/.local/bin`, which may not be
+on your `PATH` — if `evalhub: command not found` follows a successful
+install, add it:
+
+[source,bash,role="execute"]
+----
+export PATH=$HOME/.local/bin:$PATH
 evalhub --version
 ----
 
-The CLI requires Python 3.11 or later.
+[NOTE]
+====
+If `pip3` refuses with `externally-managed-environment`, install into a
+virtual environment instead and activate it before every `evalhub` command:
+
+[source,bash,role="execute"]
+----
+python3 -m venv ~/.venvs/evalhub
+source ~/.venvs/evalhub/bin/activate
+pip install eval-hub-sdk
+evalhub --version
+====
+====
 
 === Configure the CLI
 
