@@ -145,15 +145,15 @@ OpenShift Container Platform, Red Hat OpenShift AI, and Red Hat AI
 Inference version combinations, and ships them with quantized variants in
 formats such as FP8 and BF16.
 
-For this lab you use *NVIDIA Nemotron 3 Nano 30B A3B FP8*, a validated,
+For this lab you use *NVIDIA Nemotron Nano 9B v2 FP8-dynamic*, a validated,
 instruction-tuned large language model designed for enterprise deployment.
 The FP8 quantization keeps the memory footprint low: the validated model
-support matrix lists a minimum of roughly 37.6 GB of VRAM, so the model
-fits on a single 48 GB NVIDIA L40S GPU node. It delivers production-grade
-inference performance for coding assistance, reasoning tasks, and
-tool-calling workflows, which makes it ideal for Model-as-a-Service
-architectures where multiple teams share centrally-managed model
-infrastructure.
+support matrix lists a minimum of roughly 11.6 GB of VRAM, so the model fits
+on a single 24 GB NVIDIA L4 GPU node with plenty of headroom for the
+attention key-value cache. It delivers production-grade inference
+performance for coding assistance, reasoning tasks, and tool-calling
+workflows, which makes it ideal for Model-as-a-Service architectures where
+multiple teams share centrally-managed model infrastructure.
 
 You can discover and select verified generative AI models in the OpenShift
 AI *model catalog* — a curated, user-facing directory for finding models
@@ -173,18 +173,18 @@ model family appears.
 
 image::101-model-catalog.png[Model catalog showing the Nemotron model search results,link=self,window=blank,width=700]
 
-. Click the *NVIDIA-Nemotron-3-Nano-30B-A3B-FP8* model card. The model
+. Click the *NVIDIA-Nemotron-Nano-9B-v2-FP8-dynamic* model card. The model
 detail page opens with the model's description, performance insights, and
 safety and security insights.
 
-image::101-catalog-model-card.png[Model catalog page for NVIDIA-Nemotron-3-Nano-30B-A3B-FP8 with the Deploy model button,link=self,window=blank,width=700]
+image::101-catalog-model-card.png[Model catalog page for NVIDIA-Nemotron-Nano-9B-v2-FP8-dynamic with the Deploy model button,link=self,window=blank,width=700]
 
 . Click *Deploy model*. The Deploy a model wizard opens.
 . In the *Preconfigure deployment* step, select your project
 (`lab-user-dev`) and click *Next*.
 . In the *Model details* step, the model location and model type are
 imported from the model catalog and shown read-only. The wizard points the
-deployment at the validated Nemotron 3 Nano 30B A3B FP8 modelcar — an
+deployment at the validated Nemotron Nano 9B v2 FP8-dynamic modelcar — an
 OCI-compliant registry image whose filesystem holds the model weights, so
 the serving engine loads it directly from the image. The lab environment
 pre-pulls the model and serving images, which keeps startup time short.
@@ -193,13 +193,13 @@ Click *Next*.
 image::101-wizard-model-details.png[Model details step with the model location imported from the model catalog,link=self,window=blank,width=700]
 
 . In the *Model deployment* step, configure the deployment:
-.. In the *Model deployment name* field, enter `nemotron-3-nano-30b-a3b`.
+.. In the *Model deployment name* field, enter `nemotron-nano-9b-v2`.
 .. In the *Description* field, enter a short description of the deployment.
 .. Select the *GPU serving (NVIDIA L40S)* hardware profile. The profile
 provides the CPU, memory, and GPU resource baseline for the deployment.
-.. From the *Accelerator configuration* list, select *vLLM NVIDIA L40S GPU
-Single Node*. The configuration carries the GPU node toleration so the
-model server pod can schedule on the GPU node.
+.. From the *Accelerator configuration* list, select *vLLM NVIDIA GPU Single
+Node*. The configuration carries the GPU node toleration so the model
+server pod can schedule on the GPU node.
 .. Keep the *Replica count* at `1`.
 .. Click *Next*.
 
@@ -216,19 +216,13 @@ gateway is covered in Module 3.
 when the model server is configured; you use the generated token in
 Exercise 3.
 .. Expand *Additional runtime arguments* and add the following vLLM
-arguments. The reasoning parser arguments enable the Nemotron reasoning
-output parser shipped inside the modelcar — without them the model's
-reasoning appears inline in every response instead of being separated from
-the answer:
+arguments. `--trust-remote-code` is required to load the model's
+Mamba-hybrid architecture, and `--max-model-len` sets the context window:
 
 [source,role="copy"]
 ----
---max-model-len=131072
---enable-auto-tool-choice
---tool-call-parser=qwen3_coder
 --trust-remote-code
---reasoning-parser-plugin=/mnt/models/nano_v3_reasoning_parser.py
---reasoning-parser=nano_v3
+--max-model-len=131072
 ----
 .. Click *Next*.
 

@@ -11,18 +11,18 @@
 #     must not be set").
 # This config appears in the wizard's Accelerator configuration dropdown
 # (opendatahub.io/config-type=accelerator label) and delivers the GPU node
-# toleration (and GPU resource baseline) through its template when selected —
-# the wizard merges it into the created LLMInferenceService via baseRefs.
+# toleration through its template when selected — the wizard merges it into
+# the created LLMInferenceServiceConfig via baseRefs.
 #
 # The NVIDIA GPU operator taints GPU nodes (nvidia.com/gpu=l4-gpu:NoSchedule)
 # and re-applies the taint if it is removed from the node.
 apiVersion: serving.kserve.io/v1alpha2
 kind: LLMInferenceServiceConfig
 metadata:
-  name: vllm-nvidia-l40s-gpu-single-node
+  name: vllm-nvidia-gpu-single-node
   namespace: redhat-ods-applications
   annotations:
-    openshift.io/display-name: vLLM NVIDIA L40S GPU Single Node
+    openshift.io/display-name: vLLM NVIDIA GPU Single Node
     opendatahub.io/recommended-accelerators: '["nvidia.com/gpu"]'
     opendatahub.io/supported-topologies: '["workload-single-node"]'
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
