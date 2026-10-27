@@ -92,7 +92,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "3"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRolekind: ClusterRole
+kind: ClusterRole
 metadata:
   name: inference-gateway-status
   annotations:
