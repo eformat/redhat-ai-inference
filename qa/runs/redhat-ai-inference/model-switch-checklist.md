@@ -203,7 +203,3 @@ wiring, the router timeout, and the app-of-apps restructure — all verified.
 Module 2 (EvalHub) work continues in
 `qa/runs/redhat-ai-inference/module2-evalhub-checklist.md`.
 
-## Open — module 2 (EvalHub) verify pass (2026-10-27)
-
-Environment + flow findings, all verified live on the app-of-apps cluster:
-
