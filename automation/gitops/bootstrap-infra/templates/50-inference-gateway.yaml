@@ -1,0 +1,84 @@
+---
+# KServe inference gateway (module 1 — LLMInferenceService deployments).
+#
+# RHOAI 3.6-ea2: the KServe controller's managed HTTPRoute for every
+# LLMInferenceService references the Gateway openshift-ingress/
+# openshift-ai-inference by default — without it the deployment sits
+# RefsInvalid ("Managed HTTPRoute references non-existent Gateway
+# openshift-ingress/openshift-ai-inference") and the model's external route
+# never comes up.
+#
+# Shape mirrors the verified pool gateway policy (rhoai-cluster-pool
+# policy-collection policy-gateway.yaml) and the DSC aigateway component's
+# data-science-gateway: GatewayClass + Gateway on the OpenShift gateway
+# controller (openshift.io/gateway-controller/v1), https listener with
+# allowedRoutes from All so HTTPRoutes from any student project namespace can
+# attach, and the serving-cert ConfigMap pattern (infrastructure.parametersRef)
+# so the gateway Service gets a platform-issued TLS secret.
+#
+# Wave 2: same wave as the other gateways; the OpenShift gateway controller is
+# platform-level so no CRD wait is needed.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: openshift-ai-inference
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  controllerName: openshift.io/gateway-controller/v1
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openshift-ai-inference-config
+  namespace: openshift-ingress
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "2"
+data:
+  # Service parameters the gateway controller renders from the Gateway's
+  # infrastructure.parametersRef. The serving-cert annotation makes the
+  # service-ca operator issue the gateway Service a TLS secret.
+  service: |
+    metadata:
+      annotations:
+        service.beta.openshift.io/serving-cert-secret-name: "openshift-ai-inference-service-tls"
+    spec:
+      type: ClusterIP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: openshift-ai-inference
+  namespace: openshift-ingress
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "2"
+    opendatahub.io/managed: "false"
+  labels:
+    app.kubernetes.io/name: openshift-ai-inference
+    app.kubernetes.io/instance: openshift-ai-inference
+    app.kubernetes.io/component: gateway
+spec:
+  gatewayClassName: openshift-ai-inference
+  infrastructure:
+    parametersRef:
+      group: ""
+      kind: ConfigMap
+      name: openshift-ai-inference-config
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      allowedRoutes:
+        # Model HTTPRoutes from any student project namespace attach here
+        # (the KServe controller's managed route targets this gateway).
+        namespaces:
+          from: All
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: openshift-ai-inference-service-tls
