@@ -98,10 +98,10 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "3"
 rules:
-  - apiGroups: ["gateway.networking.k8s.io"]
-    resources: ["gateways"]
-    resourceNames: ["openshift-ai-inference"]
-    verbs: ["get", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["services", "services/status"]
+    resourceNames: ["openshift-ai-inference-openshift-ai-inference"]
+    verbs: ["get", "patch"]
   - apiGroups: ["config.openshift.io"]
     resources: ["ingresses"]
     resourceNames: ["cluster"]
@@ -139,21 +139,28 @@ subjects:
     name: inference-gateway-setup
     namespace: redhat-ods-applications
 ---
-# Patches the gateway's https listener hostname with the external hostname
-# (inference-gateway.<apps-domain>, e.g. inference-gateway.apps.<cluster-domain>),
-# and creates the external Route fronting the gateway Service, so the KServe
-# controller's managed HTTPRoute — which carries no hostname — resolves to an
-# external URL and the model gets a reachable *.apps route.
+# Gives the gateway an external hostname WITHOUT touching the listener, and
+# creates the external Route fronting the gateway Service, so the KServe
+# controller's managed HTTPRoute resolves to a reachable *.apps URL.
+#
+# WHY NOT A LISTENER HOSTNAME: the OpenShift router's reencrypt backend sends
+# SNI = the Service name (verifyhost in the generated haproxy config), but a
+# listener hostname makes the gateway accept ONLY that hostname's SNI — the
+# router's backend connection is reset and the external URL 503s. The
+# maas-default-gateway solves this the same way: no listener hostname, the
+# external hostname patched into the Service status (the gateway controller
+# reflects it into gateway.status.addresses, which is what the KServe URL
+# derives from), plus a reencrypt Route.
 #
 # WHY A JOB AND NOT A MANIFEST: the hostname is cluster-specific — a static
-# chart listener would need the apps domain value in git; the Job reads the
-# domain live from ingress.config/cluster instead, so the chart is portable
+# manifest would need the apps domain value in git; the Job reads the domain
+# live from ingress.config/cluster instead, so the chart is portable
 # across repos/clusters (the maas-gateway-status precedent, same domain
 # convention: the ingress.config value already carries the "apps" prefix).
 # ArgoCD does not track hook-created resources; BeforeHookCreation re-runs
-# the Job on every sync, and the Job re-applies the hostname after each chart
-# re-apply (the chart's Gateway has no hostname, so the sync briefly clears
-# it — the Job at wave 3, after the Gateway at wave 2, restores it).
+# the Job on every sync, and the Job re-applies the hostname after each
+# chart re-apply (the Service status drifts back to the service name when
+# the gateway is re-programmed — the Job at wave 3 restores it).
 #
 # Idempotent (same values); BeforeHookCreation re-runs on every sync.
 apiVersion: batch/v1
@@ -186,20 +193,27 @@ spec:
               # inference-gateway.<domain> — no extra "apps." segment.
               DOMAIN="$(oc get ingress.config cluster -o jsonpath='{.spec.domain}')"
               HOST="inference-gateway.${DOMAIN}"
-              until oc -n openshift-ingress get gateway openshift-ai-inference >/dev/null 2>&1; do
-                echo "waiting for the gateway"; sleep 10
+              # The gateway Service is created by the gateway controller from
+              # the Gateway (same wave); its name derives from
+              # <gateway-name>-<gatewayclass-name>.
+              SVC=openshift-ai-inference-openshift-ai-inference
+              until oc -n openshift-ingress get gateway openshift-ai-inference >/dev/null 2>&1 \
+                  && oc -n openshift-ingress get svc "$SVC" >/dev/null 2>&1; do
+                echo "waiting for the gateway Service"; sleep 10
               done
-              # Listener patch — the https listener gets the external hostname;
-              # the KServe managed HTTPRoute (no hostname of its own) then
-              # resolves to an external URL on this host.
-              oc -n openshift-ingress patch gateway openshift-ai-inference --type=merge -p "{\"spec\":{\"listeners\":[{\"name\":\"https\",\"port\":443,\"protocol\":\"HTTPS\",\"allowedRoutes\":{\"namespaces\":{\"from\":\"All\"}},\"hostname\":\"${HOST}\",\"tls\":{\"mode\":\"Terminate\",\"certificateRefs\":[{\"group\":\"\",\"kind\":\"Secret\",\"name\":\"openshift-ai-inference-service-tls\"}]}}]}}"
-              echo "gateway listener hostname patched with ${HOST}"
+              # Status-only patch — the Service gets the external hostname as
+              # its address; the gateway controller reflects it into
+              # gateway.status.addresses, which is what the KServe URL and the
+              # endpoints dialog derive from (the maas-gateway pattern).
+              oc -n openshift-ingress patch svc "$SVC" --subresource=status --type=merge \
+                -p "{\"status\":{\"loadBalancer\":{\"ingress\":[{\"hostname\":\"${HOST}\"}]}}}"
+              echo "gateway Service status patched with ${HOST}"
               # External Route fronting the gateway Service (created here, not
-              # in the chart: the host is cluster-specific — the maas-gateway
-              # pattern). Without it the router has no backend for the
-              # listener hostname and the external URL returns 503.
-              # oc apply is idempotent and updates the host if the domain
-              # ever changes.
+              # in the chart: the host is cluster-specific). The listener has
+              # NO hostname, so the router's reencrypt backend connection
+              # (SNI = the Service name) is accepted by the gateway and
+              # forwarded to the model HTTPRoute. oc apply is idempotent and
+              # updates the host if the domain ever changes.
               cat <<ROUTE | oc -n openshift-ingress apply -f -
               apiVersion: route.openshift.io/v1
               kind: Route
@@ -211,7 +225,7 @@ spec:
                 host: "${HOST}"
                 to:
                   kind: Service
-                  name: openshift-ai-inference-openshift-ai-inference
+                  name: ${SVC}
                   weight: 100
                 port:
                   targetPort: https
