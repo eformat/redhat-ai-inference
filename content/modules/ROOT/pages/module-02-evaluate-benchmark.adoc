@@ -37,37 +37,45 @@ The lab's jumphost does not ship the CLI, so install it first.
 
 === Install the EvalHub CLI
 
-The lab's jumphost does not ship the CLI, so install it first. The CLI
-requires Python 3.11 or later:
+The lab's jumphost does not ship the CLI — or `pip` — so bootstrap both. The
+CLI requires Python 3.11 or later:
 
 [source,bash,role="execute"]
 ----
 python3 --version
-pip3 install --user eval-hub-sdk
+python3 -m pip --version
 ----
 
-The installer drops the `evalhub` binary in `~/.local/bin`, which may not be
-on your `PATH` — if `evalhub: command not found` follows a successful
-install, add it:
+If the second command reports a pip version, pip is available as a module and
+you can skip to the install. If it reports `No module named pip` (the lab
+jumphost), bootstrap pip into your home directory first — this needs no root
+access:
 
 [source,bash,role="execute"]
 ----
+curl -sSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+python3 /tmp/get-pip.py --user
 export PATH=$HOME/.local/bin:$PATH
+----
+
+Then install the CLI. The CLI's dependencies (click, rich, pyyaml) ship as
+the `[cli]` extra, so install with the extra — a plain install leaves the CLI
+unimportable. The installer drops the `evalhub` binary in `~/.local/bin`, so
+make sure that directory is on your `PATH` (the `export` above) before
+running any `evalhub` command:
+
+[source,bash,role="execute"]
+----
+python3 -m pip install --user "eval-hub-sdk[cli]"
 evalhub --version
 ----
 
 [NOTE]
 ====
-If `pip3` refuses with `externally-managed-environment`, install into a
-virtual environment instead and activate it before every `evalhub` command:
-
-[source,bash,role="execute"]
-----
-python3 -m venv ~/.venvs/evalhub
-source ~/.venvs/evalhub/bin/activate
-pip install eval-hub-sdk
-evalhub --version
-====
+If `pip install` fails with a network error, check the jumphost's outbound
+internet access — the install pulls the package and its dependencies from
+PyPI. All `evalhub` commands after the install talk only to the in-cluster
+EvalHub service.
 ====
 
 === Configure the CLI

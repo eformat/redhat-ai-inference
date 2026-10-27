@@ -216,11 +216,18 @@ placeholder URLs that do not match the 9B deployment. Rebuild: verify → write
 - [x] All 7 screenshots wired in (201, 202, 202b, 202c, 203, 204, 205) with
       descriptive alt text, width=700.
 - [x] Antora build 0 errors (exit 0) + secrets clean on the changed files.
-- [x] INSTALL INSTRUCTIONS BULLETPROOFED (2026-10-27, Mike hit `evalhub:
-      command not found` on the jumphost): the install step now covers the
-      Python version check, `pip3 install --user eval-hub-sdk`, the
-      `~/.local/bin` PATH export (the #1 gotcha — the installer drops the
-      binary off-PATH), and the venv fallback for
-      `externally-managed-environment` (RHEL images refuse bare pip installs).
+- [x] INSTALL INSTRUCTIONS BULLETPROOFED v2 (2026-10-27, Mike hit
+      `pip3: command not found` on the jumphost — Python 3.12.12 present but
+      NO pip at all): the install chain is now (1) `python3 -m pip --version`
+      check, (2) if pip is missing bootstrap it with
+      `curl -sSL https://bootstrap.pypa.io/get-pip.py | python3 ... --user`
+      (no root, no ensurepip — the venv fallback was WRONG for the jumphost:
+      python3 -m venv also needs ensurepip), (3) the ~/.local/bin PATH export,
+      (4) `python3 -m pip install --user "eval-hub-sdk[cli]"` — the [cli] EXTRA
+      IS REQUIRED: click/packaging/pyyaml/rich ship as the [cli] extra and a
+      plain install leaves the CLI unimportable (ModuleNotFoundError: No
+      module named 'click'). NOTE: the install needs outbound internet from
+      the jumphost (PyPI — verified working); all evalhub commands after the
+      install talk only to the in-cluster EvalHub service.
 - [ ] Optional polish: the module-02 nav title/overview wording review,
       ph-check.py if the publishing house runs it.
