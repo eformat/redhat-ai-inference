@@ -90,12 +90,19 @@ authorization you need:
 evalhub config set base_url https://evalhub-redhat-ods-applications.apps.ocp.ddrcj.sandbox4732.opentlc.com
 evalhub config set tenant lab-user-dev
 evalhub config set token $(oc whoami -t)
+evalhub config set insecure true
 evalhub health
 ----
 
 `evalhub health` should report the service as healthy:
 
 image::201b-cli-health.png[The evalhub CLI reporting the EvalHub service as healthy,link=self,window=blank,width=700]
+
+The `insecure` setting disables CLI TLS verification: the jumphost does not
+carry the cluster's certificate authority in its trust store, so the CLI
+cannot verify the service certificate. This is a lab-only convenience — a
+production setup would install the cluster CA into the client trust store
+instead.
 
 === Create the model authentication secret
 
