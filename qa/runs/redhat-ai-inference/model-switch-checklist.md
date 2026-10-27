@@ -60,16 +60,22 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
       `101-wizard-deployment.png` (gpu-serving + "vLLM NVIDIA GPU Single Node"),
       `101-wizard-advanced.png` (new args),
       `101-wizard-review.png`
-- [ ] Module 1 "What the wizard creates": actual resource name
+- [x] Module 1 "What the wizard creates": actual resource name
       (`redhatainvidia-nemotron-nano-9` — model-derived, truncated), modelcar
       URI (`rhelai1/...:1.5`), resources, args incl. the reasoning parser
-- [ ] Module 1 Exercise 3: model URL (internal gateway URL now; external after
-      the hostname Job), model name `redhatainvidia-nemotron-nano-9`, response
-      example reflecting the reasoning separation
-- [ ] Module 1 config table: sizing narrative for the 9B on the L4, args
-      explanation (trust-remote-code, max-model-len, reasoning parser)
-- [ ] Audit Modules 2–6 for 30B model references (name/URI/size) and update
-- [ ] Audit `qa-automation/e2e.yml` + `healthcheck.yml` for model references
-- [ ] Decide: hardware profile display-name "GPU serving (NVIDIA L40S)" — the
-      L40S mention is cosmetic-only (identifiers are GPU-generic); rename to
-      "GPU serving" if wanted
+- [x] Module 1 Exercise 3: gateway URL, model name `redhatainvidia-nemotron-nano-9`,
+      response example with the `reasoning` field (real captured response,
+      finish: stop, 325 completion tokens)
+- [x] Hardware profile display-names renamed to GPU-generic: profile
+      display-name "GPU serving (NVIDIA GPU)", GPU identifier "NVIDIA GPU"
+      (was "GPU serving (NVIDIA L40S)" / "NVIDIA L40S GPU" — the L4 lab made
+      the L40S names misleading in wizard screenshots)
+- [x] Modules 3-6 + getting-connected updated: 9B model name (pod names use
+      the -kserve suffix), L4 node references, Nemotron Nano 9B v2 display names
+- [x] e2e.yml updated: model_name `redhatainvidia-nemotron-nano-9`, 9B
+      modelcar, wizard-preset serving image (digest-pinned), verified args,
+      l4-gpu toleration, 2/16Gi resources
+- [x] healthcheck.yml + publishing-house/spec.yaml updated: L4 gpu_type
+      (g6.2xlarge), ai_model_name filled with the 9B
+- [x] rac/ records updated: model-serving decision superseded to the 9B,
+      architecture design + requirements on L4/9B

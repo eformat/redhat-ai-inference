@@ -3,25 +3,26 @@ schema_version: 1
 id: RHAIBU-M5P8HJM0Y86K
 type: decision
 ---
-# Model Serving: Nemotron 3 Nano 30B A3B FP8 via KServe/vLLM on LLMInferenceService
+# Model Serving: Nemotron Nano 9B v2 FP8-dynamic via KServe/vLLM on LLMInferenceService
 
 ## Context
 
-The design left the open-source model choice as "(TBD)". Source-material evidence shows the consumption workflow demonstrated against `nemotron-3-nano-30b-a3b` (Nemotron 3 Nano 30B A3B FP8) served via vLLM, and the per-student environment provides one NVIDIA L40S (48 GB) GPU node. The serving stack must match what private-maas-automation deploys for platform models so the lab model behaves like the platform models used in production flows: KServe-based serving through LLMInferenceService with GPU resources of 1 GPU / 24 Gi memory.
+The design left the open-source model choice as "(TBD)". The per-student environment provides one NVIDIA L4 (24 GB) GPU node (g6.2xlarge), and the earlier model choice (Nemotron 3 Nano 30B A3B FP8, ~37.6 GB VRAM) did not fit that node. The lab needs reasoning-capable output (the `reasoning` field in API responses), and NVIDIA models are preferred for USA-based associates. The serving stack must match what the RHOAI 3.6-ea2 model catalog and serving engine presets provide: KServe-based serving through LLMInferenceService with GPU resources of 2 CPU / 16 Gi / 1 GPU, with the validated Nemotron Nano 9B v2 FP8-dynamic modelcar (~11.6 GB VRAM) from `registry.redhat.io/rhelai1`.
 
 ## Decision
 
-- Serve **Nemotron 3 Nano 30B A3B FP8** (`nemotron-3-nano-30b-a3b`) as the lab's open-source model.
-- Deploy it via **KServe/vLLM using LLMInferenceService** with the serving image **`rhaii/vllm-cuda-rhel9:3.5.1`**.
-- Allocate **GPU resources 1x GPU / 24 Gi memory** (per the private-maas-automation platform/models configuration) on the **L40S 48 GB** node.
+- Serve **Nemotron Nano 9B v2 FP8-dynamic** (`redhatainvidia-nemotron-nano-9`, modelcar `oci://registry.redhat.io/rhelai1/modelcar-nvidia-nemotron-nano-9b-v2-fp8-dynamic:1.5`) as the lab's open-source model. This **supersedes** the earlier Nemotron 3 Nano 30B A3B FP8 choice, which did not fit the L4 node.
+- Deploy it via **KServe/vLLM using LLMInferenceService** with the serving image the wizard presets inject (`registry.redhat.io/rhaii-fast/vllm-cuda-rhel9`, digest-pinned in the `v3-6-0-ea-2-kserve-config-llm-single-node-template-nvidia-cuda` LLMInferenceServiceConfig).
+- Allocate **GPU resources 2 CPU / 16 Gi / 1 GPU** (from the gpu-serving hardware profile) on the **L4 24 GB** node; the l4-gpu node toleration is delivered by the custom accelerator config.
+- Runtime args: `--trust-remote-code --max-model-len=131072 --reasoning-parser nemotron_v3` — the `nemotron_v3` reasoning parser is BUILT INTO the vLLM image (no plugin needed), separating the model's thinking (`reasoning` field) from the final answer (`content` field).
 - The model and runtime configured in Module 1 carry forward unchanged through all subsequent modules (evaluation, MaaS exposure, application integration, validation, monitoring).
 
 ## Consequences
 
-- Easier: matching the private-maas-automation platform model configuration means the lab exercises the same serving path (LLMInferenceService + vLLM) the platform uses, and MaaS exposure/subscription flows work against a known-good runtime.
-- Easier: a single L40S 48 GB with 1 GPU / 24 Gi allocation fits the model comfortably with headroom for serving overhead.
-- Harder: pinning the serving image to `rhaii/vllm-cuda-rhel9:3.5.1` ties the lab to that image version; image upgrades require re-validation.
-- Trade-off accepted: FP8 quantization keeps memory within 24 Gi on one GPU at the cost of some precision versus higher-precision checkpoints.
+- Easier: the 9B model fits the L4 24 GB node with plenty of headroom (9.47 GiB loaded, no OOM) — no need for a larger GPU instance type.
+- Easier: matching the RHOAI serving engine preset configuration means the lab exercises the same serving path the platform uses, and MaaS exposure/subscription flows work against a known-good runtime.
+- Easier: the built-in `nemotron_v3` reasoning parser gives clean reasoning/answer separation in API responses with no plugin file.
+- Harder: the 9B reasons extensively (~300 tokens of thinking on simple arithmetic) — inference examples need higher max_tokens budgets (e.g. 3072) so `content` is reached.
 
 ## Status
 
@@ -33,10 +34,10 @@ Technical
 
 ## Alternatives Considered
 
-- **Larger open-source checkpoint** (full-precision or bigger parameter count): rejected — does not fit 1 GPU / 24 Gi on the L40S 48 GB node with serving headroom.
-- **Non-quantized FP16/BF16 serving**: rejected — memory footprint exceeds the 24 Gi allocation; FP8 keeps it within budget.
-- **Raw KServe InferenceService without LLMInferenceService**: rejected — the platform (private-maas-automation) deploys models via LLMInferenceService; matching it keeps the lab on the known-good serving path.
-- **Alternative serving image/version**: rejected — `rhaii/vllm-cuda-rhel9:3.5.1` is pinned and validated with RHOAI 3.5; other images are unvalidated for this lab.
+- **Nemotron 3 Nano 30B A3B FP8** (the original choice): superseded — needs ~37.6 GB VRAM, does not fit the L4 24 GB node.
+- **Non-NVIDIA reasoning models** (Qwen3, DeepSeek-R1 distills): rejected — NVIDIA models preferred for USA-based associates.
+- **Smaller non-GPU footprint**: rejected — the lab requires dedicated GPU serving.
+- **Reasoning parser plugin from the modelcar**: rejected — the 9B modelcar ships no parser plugin; the built-in `nemotron_v3` parser matches the 9B v2 output format (verified end-to-end).
 
 ## Related Requirements
 

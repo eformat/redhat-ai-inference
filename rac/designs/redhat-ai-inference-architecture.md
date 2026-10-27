@@ -21,7 +21,7 @@ The workshop "From Model to Model as a Service: Building Scalable AI Inference" 
 
 | Module | Title | Duration | Produces (carry-forward contract) |
 |--------|-------|----------|-----------------------------------|
-| M1 | Deploy a Model on Red Hat AI Enterprise | 10 min | Deployed model + runtime (Nemotron 3 Nano 30B A3B FP8, KServe/vLLM, 1xGPU/24Gi) — **carries through ALL modules** |
+| M1 | Deploy a Model on Red Hat AI Enterprise | 10 min | Deployed model + runtime (Nemotron Nano 9B v2 FP8-dynamic, KServe/vLLM, 2 CPU/16Gi/1xGPU) — **carries through ALL modules** |
 | M2 | Evaluate and Benchmark Model Performance with EvalHub | 20 min | Evaluation results (latency/throughput/quality) + saved repeatable evaluation workflow |
 | M3 | Expose the Model as a Model-as-a-Service | 20 min | MaaS endpoint URL + API key (30-day expiry) + scaling policies — **endpoint must be externally reachable from the M4 app; scaling config carries to M6** |
 | M4 | Integrate the Model into an Application | 20 min | Running application consuming the MaaS endpoint via OpenAI-compatible API — **load source for M5/M6** |
@@ -44,9 +44,9 @@ Dependency rules:
 
 ### Infrastructure requirements
 
-- OCP 4.22, multinode: 3 control plane (16 vCPU / 64 GB RAM) + 2 workers (16 vCPU / 64 GB RAM / 100 GB disk) + 1 GPU node (NVIDIA L40S 48 GB).
+- OCP 4.22, multinode: 3 control plane (16 vCPU / 64 GB RAM) + 2 workers (16 vCPU / 64 GB RAM / 100 GB disk) + 1 GPU node (NVIDIA L4 24 GB).
 - Red Hat OpenShift AI 3.5 with Model-as-a-Service enabled (subscription tiers, API keys, rate limits) and EvalHub + observability dashboard available.
-- Per-student topology on AWS g6e.12xlarge (L40S 48 GB); GitOps (Helm + ArgoCD) via automation/gitops; external services: registry.redhat.io, quay.io.
+- Per-student topology on AWS g6.2xlarge (L4 24 GB); GitOps (Helm + ArgoCD) via automation/gitops; external services: registry.redhat.io, quay.io.
 - No models pre-deployed (attendees build from scratch); benchmark dataset pre-loaded (M2); sample application provided (M4); log access for app + model server (M5).
 
 ### {attribute} parameter inventory (lab placeholders)
@@ -72,7 +72,7 @@ All values are placeholders in content; real values are injected by provisioning
 - The MaaS gateway enforces a 4 MiB request body limit (RHOAIENG-99765): evaluation payloads through the gateway must stay < ~3.8 MB.
 - Modules are strictly sequential; each module's outputs are the next module's inputs — no module may reconfigure the M1 model/runtime.
 - No real credentials, tokens, or key values in any artifact — placeholder hostnames/attributes only.
-- Serving stack pinned: Nemotron 3 Nano 30B A3B FP8 via LLMInferenceService, image `rhaii/vllm-cuda-rhel9:3.5.1`, 1xGPU/24Gi on L40S 48 GB.
+- Serving stack pinned: Nemotron Nano 9B v2 FP8-dynamic via LLMInferenceService, wizard-preset vLLM image (`rhaii-fast/vllm-cuda-rhel9`, digest-pinned), 2 CPU/16Gi/1xGPU on L4 24 GB.
 - Non-GA products: none at the infrastructure level (all GA); GenAI playground surfaces are Tech Preview and only support optional flows.
 
 ## Rationale
@@ -87,7 +87,7 @@ All values are placeholders in content; real values are injected by provisioning
 - **Stock zt-rhaibu two-repo layout** (separate showroom + automation repos): rejected — splits content and environment management; the existing all-in-one repo already holds the specs (see infrastructure-approach decision).
 - **Shared-cluster topology** (multiple students per cluster): rejected — rate limits, GPU contention, and MaaS subscription state would be shared, breaking per-student reproducibility.
 - **Direct model deployment without MaaS** (single-team serving): rejected — it skips the governance layer (subscriptions, API keys, rate limits) that is the workshop's central theme.
-- **Different model** (larger checkpoint or non-quantized): rejected — does not fit 1xGPU/24Gi on L40S 48 GB with serving headroom.
+- **Different model** (larger checkpoint or non-quantized): rejected — does not fit 2 CPU/16Gi/1xGPU on L4 24 GB with serving headroom.
 
 ## Accessibility
 
