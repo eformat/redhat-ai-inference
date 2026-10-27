@@ -220,14 +220,27 @@ placeholder URLs that do not match the 9B deployment. Rebuild: verify → write
       `pip3: command not found` on the jumphost — Python 3.12.12 present but
       NO pip at all): the install chain is now (1) `python3 -m pip --version`
       check, (2) if pip is missing bootstrap it with
-      `curl -sSL https://bootstrap.pypa.io/get-pip.py | python3 ... --user`
-      (no root, no ensurepip — the venv fallback was WRONG for the jumphost:
-      python3 -m venv also needs ensurepip), (3) the ~/.local/bin PATH export,
-      (4) `python3 -m pip install --user "eval-hub-sdk[cli]"` — the [cli] EXTRA
-      IS REQUIRED: click/packaging/pyyaml/rich ship as the [cli] extra and a
-      plain install leaves the CLI unimportable (ModuleNotFoundError: No
-      module named 'click'). NOTE: the install needs outbound internet from
-      the jumphost (PyPI — verified working); all evalhub commands after the
-      install talk only to the in-cluster EvalHub service.
+      `curl -sSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py &&
+      python3 /tmp/get-pip.py --user` (no root, no ensurepip — the venv
+      fallback was WRONG for the jumphost: python3 -m venv also needs
+      ensurepip), (3) the ~/.local/bin PATH export, (4) `python3 -m pip
+      install --user "eval-hub-sdk[cli]"` — the [cli] EXTRA IS REQUIRED:
+      click/packaging/pyyaml/rich ship as the [cli] extra and a plain install
+      leaves the CLI unimportable (ModuleNotFoundError: No module named
+      'click'). Verified working on the jumphost: pip 26.2.2 + eval-hub-sdk
+      1.0.6 installed. The install needs outbound internet from the jumphost
+      (PyPI — verified working); all evalhub commands after the install talk
+      only to the in-cluster EvalHub service.
+- [x] CLI TLS FIX (2026-10-27, the wetty terminal): `evalhub config set
+      insecure true` added to the Configure the CLI block. ROOT CAUSE: the
+      wetty terminal is itself a pod — the evalhub client auto-detects its
+      ServiceAccount CA (the rhpds cluster's CA) as the trust bundle
+      (`_resolve_ca_bundle`: /var/run/secrets/.../ca.crt) and passes it
+      explicitly to httpx, so certifi is never consulted and the lab's
+      Let's Encrypt cert does not chain to the rhpds CA → CERTIFICATE_VERIFY_
+      FAILED. The certifi-append approach does not apply (the SA CA is a
+      read-only mount; the CLI never consults certifi when the SA CA exists).
+      Verified: the pip certifi bundle DOES verify the chain (0 ok) — it is
+      simply never used on the wetty terminal.
 - [ ] Optional polish: the module-02 nav title/overview wording review,
       ph-check.py if the publishing house runs it.
