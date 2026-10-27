@@ -214,6 +214,14 @@ spec:
                   && oc -n openshift-ingress get svc "$SVC" >/dev/null 2>&1; do
                 echo "waiting for the gateway Service"; sleep 10
               done
+              # Ensure the Service type matches the parametersRef override.
+              # The controller renders the Service at creation time and does
+              # not re-render on ConfigMap changes, so a pre-existing
+              # ClusterIP Service stays ClusterIP — and a ClusterIP Service
+              # FORBIDS the status.loadBalancer.ingress patch below.
+              oc -n openshift-ingress patch svc "$SVC" --type=merge \
+                -p '{"spec":{"type":"LoadBalancer"}}'
+              echo "gateway Service type set to LoadBalancer"
               # Status-only patch — the Service gets the external hostname as
               # its address; the gateway controller reflects it into
               # gateway.status.addresses, which is what the KServe URL and the
