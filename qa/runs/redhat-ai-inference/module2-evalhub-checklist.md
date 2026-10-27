@@ -231,8 +231,15 @@ placeholder URLs that do not match the 9B deployment. Rebuild: verify → write
       1.0.6 installed. The install needs outbound internet from the jumphost
       (PyPI — verified working); all evalhub commands after the install talk
       only to the in-cluster EvalHub service.
-- [x] CLI TLS FIX (2026-10-27, the wetty terminal): `evalhub config set
-      insecure true` added to the Configure the CLI block. ROOT CAUSE: the
+- [x] EXPERIMENT FLAG DROPPED (2026-10-27, the learner hit "experiment
+      nemotron-9-eval is not active after create" following the docs — the
+      deleted-experiment name collision): the docs no longer pass --experiment
+      (or the experiment: section in evaljob.yaml). Without the flag the runs
+      still log to MLflow (an experiment named after the evaluation — verified
+      earlier: mlflow_run_id was set on a run submitted with no --experiment),
+      and the learner avoids the deleted-experiment name gotcha entirely. The
+      dashboard flow's MLflow experiment step now says "accept the default".
+      The gotcha stays as a Troubleshooting item.
       wetty terminal is itself a pod — the evalhub client auto-detects its
       ServiceAccount CA (the rhpds cluster's CA) as the trust bundle
       (`_resolve_ca_bundle`: /var/run/secrets/.../ca.crt) and passes it

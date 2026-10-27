@@ -141,14 +141,14 @@ evalhub eval run \
   --provider lm_evaluation_harness \
   -b arc_easy -b truthfulqa_mc1 \
   --model-auth-secret model-auth \
-  --experiment nemotron-9-eval \
   --param num_examples=10 \
   --param tokenizer=nvidia/NVIDIA-Nemotron-Nano-9B-v2
 ----
 
-The server accepts the job and returns a job ID. Without the tokenizer
-parameter the job fails with `not a valid model identifier listed on
-huggingface.co` — always pass it for models served from a modelcar.
+The server accepts the job and returns a job ID, and logs the run to an MLflow
+experiment named after the evaluation. Without the tokenizer parameter the job
+fails with `not a valid model identifier listed on huggingface.co` — always
+pass it for models served from a modelcar.
 
 image::202d-eval-submitted.png[The evalhub CLI confirming the evaluation job was submitted with a job ID,link=self,window=blank,width=700]
 
@@ -205,8 +205,8 @@ or category to find one).
 +
 --
 * *Evaluation name*: a unique name, such as `nemotron-9-recheck`.
-* *MLflow experiment*: select *Select existing experiment* and choose the
-experiment from Exercise 2 — results are logged as runs within it.
+* *MLflow experiment*: accept the default — results are logged as runs
+within the experiment, named after the evaluation.
 * *Evaluating*: *Model*, then *Choose model* and select *Other (External
 endpoint)*.
 * *Model name*: `redhatainvidia-nemotron-nano-9` (case-sensitive).
@@ -299,8 +299,6 @@ benchmarks:
     id: arc_easy
   - provider_id: lm_evaluation_harness
     id: truthfulqa_mc1
-experiment:
-  name: nemotron-9-eval
 parameters:
   num_examples: 10
   tokenizer: nvidia/NVIDIA-Nemotron-Nano-9B-v2
