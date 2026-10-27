@@ -36,7 +36,7 @@ inference request.
 == Exercise 1: Explore the lab environment
 
 Your lab environment is a Red Hat AI Enterprise cluster: OpenShift plus
-OpenShift AI, with an NVIDIA L40S 48 GB GPU worker node reserved for your
+OpenShift AI, with an NVIDIA L4 24 GB GPU worker node reserved for your
 model server. No models are pre-deployed — you build the full serving
 lifecycle from scratch.
 
@@ -90,11 +90,11 @@ control-plane-1  Ready    control-plane   26d   v1.33.4
 control-plane-2  Ready    control-plane   26d   v1.33.4
 worker-0         Ready    worker          26d   v1.33.4
 worker-1         Ready    worker          26d   v1.33.4
-gpu-worker-0     Ready    worker          26d   v1.33.4   NVIDIA-L40S
+gpu-worker-0     Ready    worker          26d   v1.33.4   NVIDIA-L4
 ----
 
 The `nvidia.com/gpu.product` label confirms `gpu-worker-0` is the NVIDIA
-L40S 48 GB GPU node. Your model server in this module requests one GPU, so
+L4 24 GB GPU node. Your model server in this module requests one GPU, so
 it schedules on this node.
 
 === Project and namespace layout
@@ -195,7 +195,7 @@ image::101-wizard-model-details.png[Model details step with the model location i
 . In the *Model deployment* step, configure the deployment:
 .. In the *Model deployment name* field, enter `nemotron-nano-9b-v2`.
 .. In the *Description* field, enter a short description of the deployment.
-.. Select the *GPU serving (NVIDIA L40S)* hardware profile. The profile
+.. Select the *GPU serving (NVIDIA GPU)* hardware profile. The profile
 provides the CPU, memory, and GPU resource baseline for the deployment.
 .. From the *Accelerator configuration* list, select *vLLM NVIDIA GPU Single
 Node*. The configuration carries the GPU node toleration so the model
@@ -203,7 +203,7 @@ server pod can schedule on the GPU node.
 .. Keep the *Replica count* at `1`.
 .. Click *Next*.
 
-image::101-wizard-deployment.png[Model deployment step with the GPU serving hardware profile and the L40S accelerator configuration,link=self,window=blank,width=700]
+image::101-wizard-deployment.png[Model deployment step with the GPU serving hardware profile and the accelerator configuration,link=self,window=blank,width=700]
 
 . In the *Advanced settings* step:
 .. Optional: select *Add as AI asset endpoint* (tech preview) to publish
@@ -217,12 +217,15 @@ when the model server is configured; you use the generated token in
 Exercise 3.
 .. Expand *Additional runtime arguments* and add the following vLLM
 arguments. `--trust-remote-code` is required to load the model's
-Mamba-hybrid architecture, and `--max-model-len` sets the context window:
+Mamba-hybrid architecture, `--max-model-len` sets the context window, and
+`--reasoning-parser nemotron_v3` separates the model's thinking from its
+final answer (the parser is built into the vLLM image — no plugin needed):
 
 [source,role="copy"]
 ----
 --trust-remote-code
 --max-model-len=131072
+--reasoning-parser nemotron_v3
 ----
 .. Click *Next*.
 
@@ -246,7 +249,7 @@ oc get pods -w
 
 ----
 NAME                                                    READY   STATUS    RESTARTS   AGE
-nemotron-3-nano-30b-a3b-kserve-7d9f8b6c5-k2p9q          2/2     Running   0          4m
+redhatainvidia-nemotron-nano-9-kserve-7d9f8b6c5-k2p9q   2/2     Running   0          4m
 ----
 
 The pod transitions from `Pending` to `Running` once the model server is
@@ -264,9 +267,9 @@ image::101-deployment-status.png[AI asset endpoints page showing the deployed mo
 
 Behind the scenes, the wizard creates an `LLMInferenceService` resource on
 the single-model serving platform (KServe), named after the model from the
-catalog. The hardware profile you selected (`GPU serving (NVIDIA L40S)`)
+catalog. The hardware profile you selected (`GPU serving (NVIDIA GPU)`)
 provides the CPU, memory, and GPU resource baseline, the accelerator
-configuration you selected (`vLLM NVIDIA L40S GPU Single Node`) contributes
+configuration you selected (`vLLM NVIDIA GPU Single Node`) contributes
 the GPU node toleration, and any custom runtime arguments you added in the
 Advanced settings appear as the `VLLM_ADDITIONAL_ARGS` environment variable.
 The resource shown here is the configuration used in this lab, simplified
@@ -277,7 +280,7 @@ for readability:
 apiVersion: serving.kserve.io/v1alpha2
 kind: LLMInferenceService
 metadata:
-  name: redhatainvidia-nemotron-3-nano
+  name: redhatainvidia-nemotron-nano-9
   namespace: lab-user-dev
   annotations:
     opendatahub.io/hardware-profile-name: gpu-serving
@@ -287,10 +290,10 @@ metadata:
     opendatahub.io/genai-asset: "true"
 spec:
   baseRefs:
-    - name: redhatainvidia-nemotron-3-nano
+    - name: redhatainvidia-nemotron-nano-9
   model:
-    name: redhatainvidia-nemotron-3-nano
-    uri: oci://registry.redhat.io/rhai/modelcar-nvidia-nemotron-3-nano-30b-a3b-fp8:3.0
+    name: redhatainvidia-nemotron-nano-9
+    uri: oci://registry.redhat.io/rhelai1/modelcar-nvidia-nemotron-nano-9b-v2-fp8-dynamic:1.5
   replicas: 1
   router:
     gateway: {}
@@ -301,12 +304,9 @@ spec:
         env:
           - name: VLLM_ADDITIONAL_ARGS
             value: >-
-              --max-model-len=131072
-              --enable-auto-tool-choice
-              --tool-call-parser=qwen3_coder
               --trust-remote-code
-              --reasoning-parser-plugin=/mnt/models/nano_v3_reasoning_parser.py
-              --reasoning-parser=nano_v3
+              --max-model-len=131072
+              --reasoning-parser nemotron_v3
         resources:
           requests:
             cpu: "2"
@@ -327,7 +327,7 @@ accelerator configuration you selected:
 apiVersion: serving.kserve.io/v1alpha2
 kind: LLMInferenceServiceConfig
 metadata:
-  name: redhatainvidia-nemotron-3-nano
+  name: redhatainvidia-nemotron-nano-9
 spec:
   template:
     tolerations:
@@ -344,7 +344,7 @@ spec:
 | Field | Purpose
 
 | `spec.model.uri`
-| Points to the validated Nemotron 3 Nano 30B A3B FP8 modelcar. The model
+| Points to the validated Nemotron Nano 9B v2 FP8-dynamic modelcar. The model
 ships as a container image, so the serving engine loads it directly from
 the image filesystem instead of downloading from remote object storage.
 
@@ -364,7 +364,7 @@ gateway terminates TLS and serves the model's external route over HTTPS.
 
 | `spec.template.containers.resources`
 | Requests and limits of 2 CPU / 16 Gi memory / 1 GPU, from the GPU serving
-hardware profile — sized for the Nemotron model on a single L40S GPU node.
+hardware profile — sized for the Nemotron model on a single NVIDIA GPU node.
 
 | `kueue.x-k8s.io/queue-name: default`
 | Places the deployment in the project's Kueue queue for admission, so the
@@ -372,11 +372,11 @@ model server is scheduled within the cluster's GPU quota.
 
 | custom runtime arguments (`VLLM_ADDITIONAL_ARGS`)
 | Passed to vLLM through the `VLLM_ADDITIONAL_ARGS` environment variable.
-`--max-model-len=131072` sets a 131,072-token context window;
-`--enable-auto-tool-choice` with `--tool-call-parser=qwen3_coder` enables
-tool-calling; `--trust-remote-code` allows the model's custom code;
-`--reasoning-parser-plugin` and `--reasoning-parser=nano_v3` enable the
-Nemotron reasoning output parser shipped inside the modelcar.
+`--trust-remote-code` allows the model's custom code (Mamba-hybrid
+architecture); `--max-model-len=131072` sets a 131,072-token context window;
+`--reasoning-parser nemotron_v3` separates the model's thinking from its final
+answer in API responses — the parser is built into the vLLM image, so no
+plugin is needed.
 
 | tolerations (via `baseRefs`)
 | Lets the pod schedule on the GPU node, which is tainted
@@ -407,17 +407,17 @@ oc get pods
 
 ----
 NAME                                               READY   STATUS    RESTARTS   AGE
-nemotron-3-nano-30b-a3b-predictor-7d9f8b6c5-k2p9q  1/1     Running   0          4m
+redhatainvidia-nemotron-nano-9-kserve-6ccdd4bddc-8kp9h  2/2  Running   0          4m
 ----
 
 [source,role="execute"]
 ----
-oc get llminferenceservice nemotron-3-nano-30b-a3b
+oc get llminferenceservice redhatainvidia-nemotron-nano-9
 ----
 
 ----
-NAME                       URL                                                              READY   AGE
-nemotron-3-nano-30b-a3b    https://nemotron-3-nano-30b-a3b-lab-user-dev.apps.cluster.example.com   True    5m
+NAME                            URL                                                                              READY   AGE
+redhatainvidia-nemotron-nano-9  https://inference-gateway.apps.cluster.example.com/lab-user-dev/redhatainvidia-nemotron-nano-9   True    5m
 ----
 
 When the `READY` column shows `True`, the model server pod is Running and
@@ -441,53 +441,58 @@ instead, with the same `Authorization: Bearer` header pattern.)
 
 The vLLM runtime is compatible with the OpenAI REST API, so the model
 serves the `/v1/chat/completions` path. The model serving platform serves
-external API requests over the HTTPS port of the OpenShift router (usually
+API requests over the HTTPS port of the inference gateway (usually
 port 443).
 
 Store the endpoint and token as shell variables, then send a chat request:
 
 [source,bash,role="execute"]
 ----
-MODEL_URL=https://nemotron-3-nano-30b-a3b-lab-user-dev.apps.cluster.example.com
+MODEL_URL=https://inference-gateway.apps.cluster.example.com/lab-user-dev/redhatainvidia-nemotron-nano-9
 TOKEN=paste-your-token-secret-here
 
 curl -s $MODEL_URL/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
-    "model": "nemotron-3-nano-30b-a3b",
+    "model": "redhatainvidia-nemotron-nano-9",
     "messages": [
       {
         "role": "user",
         "content": "In one sentence, what is Model as a Service?"
       }
-    ]
+    ],
+    "max_tokens": 3072
   }'
 ----
 
 A successful response returns the assistant's answer in the
-OpenAI-compatible chat completion format:
+OpenAI-compatible chat completion format. Because the deployment includes
+the `--reasoning-parser nemotron_v3` argument, the model's thinking is
+returned in a separate `reasoning` field, and `content` holds only the
+final answer (abbreviated for readability):
 
 ----
 {
-  "id": "chatcmpl-4f9c8b3e",
+  "id": "chatcmpl-f584f9ba-8c56-4567-a050-bd82afda14cc",
   "object": "chat.completion",
-  "created": 1761321600,
-  "model": "nemotron-3-nano-30b-a3b",
+  "created": 1793069237,
+  "model": "redhatainvidia-nemotron-nano-9",
   "choices": [
     {
       "index": 0,
       "message": {
         "role": "assistant",
-        "content": "Model as a Service (MaaS) is a deployment model that provides access to pre-trained AI models through APIs, so you can consume model capabilities without managing the underlying infrastructure."
+        "reasoning": "Okay, the user is asking for a one-sentence explanation of \"Model as a Service.\" Let me start by breaking down the term. \"Model\" here likely refers to machine learning models. \"Service\" suggests a cloud-based or API-driven offering...",
+        "content": "Model as a Service is a cloud-based platform that provides pre-trained machine learning models via APIs, enabling users to deploy, manage, and scale AI solutions without building models from scratch."
       },
       "finish_reason": "stop"
     }
   ],
   "usage": {
-    "prompt_tokens": 21,
-    "completion_tokens": 38,
-    "total_tokens": 59
+    "prompt_tokens": 23,
+    "completion_tokens": 325,
+    "total_tokens": 348
   }
 }
 ----

@@ -43,7 +43,7 @@ maas-chat-client --HTTP POST-->  maas-default-gateway  --HTTP-->  vLLM predictor
  application logs          istio-proxy log             predictor logs
 ----
 
-The model behind the gateway is `nemotron-3-nano-30b-a3b`, serving in your project (Module 1) and published to the `maas-default-gateway` gateway (Module 3). The consuming application is the one deployed in Module 4.
+The model behind the gateway is `redhatainvidia-nemotron-nano-9`, serving in your project (Module 1) and published to the `maas-default-gateway` gateway (Module 3). The consuming application is the one deployed in Module 4.
 
 image::501-serving-chain.png[Annotated serving-chain diagram from application through MaaS gateway and model server to model,link=self,window=blank,width=700]
 
@@ -96,7 +96,7 @@ image::503-gateway-logs.png[Gateway istio-proxy access log with the 200 entry,li
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-MODEL_POD=$(oc get pods -n {project-namespace} -o name | grep '^pod/nemotron-3-nano-30b-a3b-predictor' | head -1)
+MODEL_POD=$(oc get pods -n {project-namespace} -o name | grep '^pod/redhatainvidia-nemotron-nano-9-kserve' | head -1)
 oc logs -n {project-namespace} ${MODEL_POD} --tail=20
 ----
 
@@ -168,7 +168,7 @@ curl -s "${MAAS_URL}/v1/models" -H "Authorization: Bearer ${MAAS_API_KEY}" | jq 
 Expected output:
 
 ----
-publishers/{project-namespace}/models/nemotron-3-nano-30b-a3b   true
+publishers/{project-namespace}/models/redhatainvidia-nemotron-nano-9   true
 ----
 
 . *Gateway routing.* The gateway pods must be `Running`:
@@ -189,14 +189,14 @@ maas-default-gateway-istio-6f9b7d8c4-xq2lp    1/1     Running   0          2d
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-oc get llminferenceservice nemotron-3-nano-30b-a3b -n {project-namespace}
+oc get llminferenceservice redhatainvidia-nemotron-nano-9 -n {project-namespace}
 ----
 
 Expected output:
 
 ----
 NAME                          URL   READY   AGE
-nemotron-3-nano-30b-a3b             True    45m
+redhatainvidia-nemotron-nano-9             True    45m
 ----
 
 . *Metrics endpoints.* The model server exposes Prometheus metrics on port `8080` at `/metrics`. Forward the port and scrape it:
@@ -215,7 +215,7 @@ Expected output (vLLM metric series):
 ----
 # HELP vllm:num_requests_running Number of requests currently running on GPU.
 # TYPE vllm:num_requests_running gauge
-vllm:num_requests_running{model_name="publishers/{project-namespace}/models/nemotron-3-nano-30b-a3b"} 0.0
+vllm:num_requests_running{model_name="publishers/{project-namespace}/models/redhatainvidia-nemotron-nano-9"} 0.0
 ----
 
 [NOTE]

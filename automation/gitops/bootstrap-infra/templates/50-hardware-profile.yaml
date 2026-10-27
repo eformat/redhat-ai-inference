@@ -29,7 +29,7 @@ metadata:
   annotations:
     opendatahub.io/dashboard-feature-visibility: '[]'
     opendatahub.io/disabled: "false"
-    opendatahub.io/display-name: GPU serving (NVIDIA L40S)
+    opendatahub.io/display-name: GPU serving (NVIDIA GPU)
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "2"
   name: gpu-serving
@@ -49,7 +49,7 @@ spec:
     minCount: 1Gi
     resourceType: Memory
   - defaultCount: 1
-    displayName: NVIDIA L40S GPU
+    displayName: NVIDIA GPU
     identifier: nvidia.com/gpu
     maxCount: 1
     minCount: 1

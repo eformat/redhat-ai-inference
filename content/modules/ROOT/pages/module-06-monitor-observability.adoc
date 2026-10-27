@@ -325,8 +325,8 @@ oc get pods
 
 ----
 NAME                                               READY   STATUS    RESTARTS   AGE
-nemotron-3-nano-30b-a3b-predictor-7d9f8b6c5-k2p9q  1/1     Running   0          55m
-nemotron-3-nano-30b-a3b-predictor-7d9f8b6c5-t4mzn  1/1     Running   0          50m
+redhatainvidia-nemotron-nano-9-kserve-7d9f8b6c5-k2p9q  1/1     Running   0          55m
+redhatainvidia-nemotron-nano-9-kserve-7d9f8b6c5-t4mzn  1/1     Running   0          50m
 ----
 
 [NOTE]
