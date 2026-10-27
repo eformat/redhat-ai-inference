@@ -159,7 +159,7 @@ You can discover and select verified generative AI models in the OpenShift
 AI *model catalog* — a curated, user-facing directory for finding models
 appropriate for your business use case.
 
-=== Deploy through the AI hub deploy wizard
+=== Deploy the model from the catalog
 
 To deploy the model on the single-model serving platform (KServe), GPU
 support must be enabled on the cluster and the Node Feature Discovery
@@ -167,39 +167,44 @@ Operator must be installed and configured. Both are already set up in the
 lab environment.
 
 . In the OpenShift AI dashboard left menu, click *AI hub*, then *Models*.
+The *Catalog* tab opens, listing the models available to your organization.
+. In the search field, enter `nemotron` and press *Enter*. The Nemotron
+model family appears.
+
+image::101-model-catalog.png[Model catalog showing the Nemotron model search results,link=self,window=blank,width=700]
+
+. Click the *NVIDIA-Nemotron-3-Nano-30B-A3B-FP8* model card. The model
+detail page opens with the model's description, performance insights, and
+safety and security insights.
+
+image::101-catalog-model-card.png[Model catalog page for NVIDIA-Nemotron-3-Nano-30B-A3B-FP8 with the Deploy model button,link=self,window=blank,width=700]
+
 . Click *Deploy model*. The Deploy a model wizard opens.
 . In the *Preconfigure deployment* step, select your project
 (`lab-user-dev`) and click *Next*.
-. In the *Model details* step, provide the model location:
-.. From the *Model location* list, select *OCI compliant registry*.
-.. From the *Access type* list, select *Pull secret*. The lab environment
-pre-pulls the model and serving images and provides the registry
-credentials through the project's default pull secret, so you can leave
-the *Secret details* file upload empty.
-.. In the *Registry host* field, enter `registry.redhat.io`.
-.. In the *Model URI* field, enter
-`registry.redhat.io/rhai/modelcar-nvidia-nemotron-3-nano-30b-a3b-fp8:3.0`.
-The wizard adds the `oci://` prefix, and the registry host in the URI must
-match the *Registry host* field. This URI points to the validated
-Nemotron 3 Nano 30B A3B FP8 modelcar — an OCI-compliant registry image
-whose filesystem holds the model weights, so the serving engine loads it
-directly from the image.
-.. With *Create a connection to this location* selected, enter
-`nemotron-modelcar` in the *Name* field.
-.. From the *Model type* list, select *Generative AI model (Example, LLM)*.
-.. Click *Next*.
+. In the *Model details* step, the model location and model type are
+imported from the model catalog and shown read-only. The wizard points the
+deployment at the validated Nemotron 3 Nano 30B A3B FP8 modelcar — an
+OCI-compliant registry image whose filesystem holds the model weights, so
+the serving engine loads it directly from the image. The lab environment
+pre-pulls the model and serving images, which keeps startup time short.
+Click *Next*.
+
+image::101-wizard-model-details.png[Model details step with the model location imported from the model catalog,link=self,window=blank,width=700]
+
 . In the *Model deployment* step, configure the deployment:
-.. Keep the *LLM inference service* deployment mode selected.
 .. In the *Model deployment name* field, enter `nemotron-3-nano-30b-a3b`.
 .. In the *Description* field, enter a short description of the deployment.
-.. Keep the *default-profile* hardware profile. The profile provides the
-CPU and memory baseline; the GPU comes from the accelerator configuration
-in the next step.
-.. From the *Select an accelerator configuration* list, select *vLLM NVIDIA
-CUDA GPU LLMInferenceServiceConfig Single Node*. The preset provisions the
-vLLM serving engine with one NVIDIA GPU on a single node.
-.. In the *Replica count* field, enter `1`.
+.. Select the *GPU serving (NVIDIA L40S)* hardware profile. The profile
+provides the CPU, memory, and GPU resource baseline for the deployment.
+.. From the *Accelerator configuration* list, select *vLLM NVIDIA L40S GPU
+Single Node*. The configuration carries the GPU node toleration so the
+model server pod can schedule on the GPU node.
+.. Keep the *Replica count* at `1`.
 .. Click *Next*.
+
+image::101-wizard-deployment.png[Model deployment step with the GPU serving hardware profile and the L40S accelerator configuration,link=self,window=blank,width=700]
+
 . In the *Advanced settings* step:
 .. Optional: select *Add as AI asset endpoint* (tech preview) to publish
 the model's endpoint on the *AI asset endpoints* page and make it testable
@@ -213,7 +218,12 @@ Exercise 3.
 .. Optional: expand *Additional runtime arguments* to add custom vLLM
 arguments such as the values listed in the configuration table below.
 .. Click *Next*.
-. On the *Review* step, check the summary and click *Deploy*.
+
+image::101-wizard-advanced.png[Advanced settings step with token authentication and runtime arguments,link=self,window=blank,width=700]
+
+. On the *Review* step, check the summary and click *Deploy model*.
+
+image::101-wizard-review.png[Review step summarizing the deployment configuration,link=self,window=blank,width=700]
 
 Verification: the deployed model appears with a *Ready* status on the
 *Gen AI studio → AI asset endpoints* page (if you selected *Add as AI asset
@@ -246,42 +256,41 @@ image::101-deployment-status.png[AI asset endpoints page showing the deployed mo
 === What the wizard creates
 
 Behind the scenes, the wizard creates an `LLMInferenceService` resource on
-the single-model serving platform (KServe). The accelerator configuration
-you selected (the `vLLM NVIDIA CUDA GPU LLMInferenceServiceConfig Single
-Node` preset) provisions the serving engine image and the GPU resources,
-and any custom runtime arguments you added in the Advanced settings appear
-as the `VLLM_ADDITIONAL_ARGS` environment variable. The resource shown here
-is the configuration used in this lab, simplified for readability:
+the single-model serving platform (KServe), named after the model from the
+catalog. The hardware profile you selected (`GPU serving (NVIDIA L40S)`)
+provides the CPU, memory, and GPU resource baseline, the accelerator
+configuration you selected (`vLLM NVIDIA L40S GPU Single Node`) contributes
+the GPU node toleration, and any custom runtime arguments you added in the
+Advanced settings appear as the `VLLM_ADDITIONAL_ARGS` environment variable.
+The resource shown here is the configuration used in this lab, simplified
+for readability:
 
 [source,yaml]
 ----
 apiVersion: serving.kserve.io/v1alpha2
 kind: LLMInferenceService
 metadata:
-  name: nemotron-3-nano-30b-a3b
+  name: redhatainvidia-nemotron-3-nano
   namespace: lab-user-dev
   annotations:
-    openshift.io/display-name: NVIDIA Nemotron 3 Nano 30B A3B FP8
-    opendatahub.io/model-type: generative
-    security.opendatahub.io/enable-auth: "true"
+    opendatahub.io/hardware-profile-name: gpu-serving
   labels:
+    kueue.x-k8s.io/queue-name: default
     opendatahub.io/dashboard: "true"
     opendatahub.io/genai-asset: "true"
 spec:
+  baseRefs:
+    - name: redhatainvidia-nemotron-3-nano
   model:
-    name: nemotron-3-nano-30b-a3b
+    name: redhatainvidia-nemotron-3-nano
     uri: oci://registry.redhat.io/rhai/modelcar-nvidia-nemotron-3-nano-30b-a3b-fp8:3.0
   replicas: 1
   router:
-    gateway:
-      refs:
-        - name: openshift-ai-inference
-          namespace: openshift-ingress
+    gateway: {}
     route: {}
   template:
     containers:
       - name: main
-        image: registry.redhat.io/rhaiis/vllm-cuda-rhel9:3.3.1
         env:
           - name: VLLM_ADDITIONAL_ARGS
             value: >-
@@ -297,14 +306,28 @@ spec:
             memory: 16Gi
             nvidia.com/gpu: "1"
           limits:
-            cpu: "4"
-            memory: 24Gi
+            cpu: "2"
+            memory: 16Gi
             nvidia.com/gpu: "1"
+----
+
+The `baseRefs` entry points at an `LLMInferenceServiceConfig` the wizard
+creates alongside the service — it carries the GPU node toleration from the
+accelerator configuration you selected:
+
+[source,yaml]
+----
+apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceServiceConfig
+metadata:
+  name: redhatainvidia-nemotron-3-nano
+spec:
+  template:
     tolerations:
       - effect: NoSchedule
         key: nvidia.com/gpu
         operator: Equal
-        value: l40-gpu
+        value: l4-gpu
 ----
 
 [[resource-config]]
@@ -318,23 +341,27 @@ spec:
 ships as a container image, so the serving engine loads it directly from
 the image filesystem instead of downloading from remote object storage.
 
+| `spec.baseRefs`
+| References the `LLMInferenceServiceConfig` the wizard created from the
+accelerator configuration — it contributes the GPU node toleration to the
+serving pod.
+
 | `spec.replicas`
 | One model server replica, holding one GPU. Scaling replicas out for
 shared consumption is covered in Module 3.
 
-| `spec.router.gateway`
-| Attaches the deployment to the `openshift-ai-inference` gateway in the
-`openshift-ingress` project. The gateway terminates TLS and serves the
-model's external route over HTTPS.
+| `router`
+| The KServe controller attaches the model's HTTPRoute to the
+`openshift-ai-inference` gateway in the `openshift-ingress` project. The
+gateway terminates TLS and serves the model's external route over HTTPS.
 
-| `spec.template.containers.image`
-| The serving image, `rhaiis/vllm-cuda-rhel9:3.3.1`, which runs the
-OpenAI-compatible vLLM engine on NVIDIA GPUs. The image entrypoint handles
-TLS setup and the vLLM launch, so no container `command` override is set.
+| `spec.template.containers.resources`
+| Requests and limits of 2 CPU / 16 Gi memory / 1 GPU, from the GPU serving
+hardware profile — sized for the Nemotron model on a single L40S GPU node.
 
-| `resources`
-| Requests of 2 CPU / 16 Gi memory / 1 GPU and limits of 4 CPU / 24 Gi
-memory / 1 GPU, sized for the Nemotron model on a single L40S GPU node.
+| `kueue.x-k8s.io/queue-name: default`
+| Places the deployment in the project's Kueue queue for admission, so the
+model server is scheduled within the cluster's GPU quota.
 
 | custom runtime arguments (`VLLM_ADDITIONAL_ARGS`)
 | Passed to vLLM through the `VLLM_ADDITIONAL_ARGS` environment variable.
@@ -344,9 +371,9 @@ tool-calling; `--trust-remote-code` allows the model's custom code;
 `--reasoning-parser-plugin` and `--reasoning-parser=nano_v3` enable the
 Nemotron reasoning output parser shipped inside the modelcar.
 
-| `tolerations`
+| tolerations (via `baseRefs`)
 | Lets the pod schedule on the GPU node, which is tainted
-`nvidia.com/gpu=l40-gpu:NoSchedule`.
+`nvidia.com/gpu=l4-gpu:NoSchedule`.
 |===
 
 [IMPORTANT]
