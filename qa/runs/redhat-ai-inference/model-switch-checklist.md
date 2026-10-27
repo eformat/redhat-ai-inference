@@ -40,7 +40,7 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
       examples in docs should use higher budgets (e.g. 3072)
 - [x] `hy_v3` fallback not needed
 
-## Pending — app-of-apps restructure (built, needs the ordered migration)
+## Pending — app-of-apps restructure (DONE — migrated 2026-10-27)
 
 - [x] The 74-resource bootstrap-infra chart split into 6 functional Helm
       charts wired as an app-of-apps (`automation/gitops/app-of-apps/`):
@@ -48,17 +48,19 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
       model-serving (9), observability (2) — total 74, verified.
       Each child chart: Chart.yaml + values.yaml + templates/; knobs per chart
       (operators: catalog fragment, rhoai: lab admin user, maas: postgres
-      dummy creds). Child apps wave-ordered 0-5 (the root's sync waits for
-      each child Healthy before the next); per-app prune + retry +
+      dummy creds). Child apps wave-ordered 0-5; per-app prune + retry +
       RespectIgnoreDifferences; the ConfigMap /data drift ignore carried to
       the apps with controller-mutated ConfigMaps.
-- [ ] MIGRATION (order matters — see app-of-apps/README.md): disable prune on
-      the root app FIRST, push, point the root at automation/gitops/app-of-apps,
-      wait for the six children to be Synced/Healthy, re-enable prune. Pointing
-      at app-of-apps with prune still on would delete all 74 tracked resources
-      before the children recreate them (full environment rebuild).
-- [ ] After the migration: delete the stale root-level ignoreDifferences (the
-      two ConfigMap /data entries on bootstrap) — the children carry their own
+- [x] MIGRATED: the push landed before prune was disabled — the root hit a
+      ComparisonError ("app path does not exist") which luckily BLOCKED the
+      prune (no comparison = no desired state = nothing deleted). Then the
+      README order completed: prune off → root pointed at app-of-apps → the
+      six children created and adopted the existing resources (no churn) →
+      all Synced/Healthy with the full 74-resource inventory → prune
+      re-enabled + the stale root-level ignoreDifferences removed. Smoke
+      test: /v1/models via the gateway OK, model READY.
+- [x] Debugging is now per-function: `rhai-model-serving` for gateway issues,
+      `rhai-maas` for MaaS, etc. instead of the 74-resource wall.
 
 
 - [ ] Push chart changes: accelerator config rename + inference-gateway-status
