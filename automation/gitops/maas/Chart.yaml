@@ -1,0 +1,6 @@
+apiVersion: v2
+name: maas
+description: MaaS stack — postgres DB, maas-default-gateway + status Job, MLflow, EvalHub, Kuadrant/Authorino, TelemetryPolicy
+type: application
+version: 1.0.0
+appVersion: "3.6-ea2"

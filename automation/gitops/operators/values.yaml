@@ -1,0 +1,5 @@
+# Knobs for the operators layer. Everything else is a pinned spec mirroring
+# the validated prelude-nightly-36 pool overlay (RHOAI 3.6-ea2).
+catalog:
+  name: rhoai-catalog-nightly
+  image: quay.io/rhoai/rhoai-fbc-fragment:rhoai-3.6@sha256:6f23935b80b9e376059f4ba6a03e7fe5c2f324bd3c2d556d331bc42092c5c093 # 3.6-ea2

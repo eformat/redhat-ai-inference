@@ -1,0 +1,6 @@
+apiVersion: v2
+name: operators
+description: Operator layer — namespaces, catalog source, ICSP, OperatorGroups, Subscriptions, NFD ClusterPolicy
+type: application
+version: 1.0.0
+appVersion: "3.6-ea2"

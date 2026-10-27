@@ -1,0 +1,6 @@
+apiVersion: v2
+name: operator-configs
+description: Serving infrastructure operators — Kueue/LWS/JobSet operator configs and the model-serving ClusterQueue
+type: application
+version: 1.0.0
+appVersion: "3.6-ea2"

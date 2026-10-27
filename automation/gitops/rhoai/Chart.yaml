@@ -1,0 +1,6 @@
+apiVersion: v2
+name: rhoai
+description: RHOAI platform — DSCInitialization, DataScienceCluster, CheCluster, dashboard configs, rhods-admins group
+type: application
+version: 1.0.0
+appVersion: "3.6-ea2"

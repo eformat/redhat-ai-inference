@@ -1,0 +1,6 @@
+# Dummy lab-internal postgres credentials for the MaaS controller DB
+# (pool pattern — throwaway in-cluster DB, not a real secret).
+postgres:
+  user: maas
+  password: password
+  db: maas

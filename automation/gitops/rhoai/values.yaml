@@ -1,0 +1,5 @@
+# Knobs for the RHOAI platform layer.
+lab:
+  # Member of the rhods-admins group -> RHOAI dashboard admin (deploy wizard,
+  # admin views). NOT cluster-admin — the chart itself is deployed by the admin.
+  adminUser: lab-user1

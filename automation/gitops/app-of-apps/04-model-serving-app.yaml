@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rhai-model-serving
+  namespace: openshift-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/rhpds/redhat-ai-inference.git
+    targetRevision: main
+    path: automation/gitops/model-serving
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+    syncOptions:
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 20s
+        factor: 2
+        maxDuration: 5m
+  ignoreDifferences:
+    # The gateway controller mutates ConfigMap data — keep the drift out of
+    # the app status (carried over from the former root app).
+    - group: ""
+      kind: ConfigMap
+      jsonPointers:
+        - /data

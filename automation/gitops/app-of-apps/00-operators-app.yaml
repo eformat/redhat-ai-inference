@@ -1,0 +1,40 @@
+---
+# App-of-apps: the root Application (named `bootstrap`) points at THIS path.
+# Each file here is a child Application scoped to one functional area — split
+# from the former single 74-resource bootstrap-infra chart so debugging is
+# per-function instead of one wall of resources.
+#
+# Child apps are wave-ordered: the root's sync waits for each wave's child app
+# to go Healthy before creating the next, which preserves the deployment order
+# the former sync-waves enforced (operators -> RHOAI -> serving configs ->
+# MaaS -> model-serving -> observability). Within each child app its own
+# resource sync-waves apply.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rhai-operators
+  namespace: openshift-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/rhpds/redhat-ai-inference.git
+    targetRevision: main
+    path: automation/gitops/operators
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+    syncOptions:
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 20s
+        factor: 2
+        maxDuration: 5m
