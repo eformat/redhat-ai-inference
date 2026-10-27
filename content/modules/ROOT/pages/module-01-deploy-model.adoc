@@ -433,7 +433,7 @@ First, the endpoint URL from the `LLMInferenceService`:
 [source,bash,role="execute"]
 ----
 MODEL_URL=$(oc get llminferenceservice redhatainvidia-nemotron-nano-9 -o jsonpath='{.status.url}')
-echo $MODEL_URL
+echo "MODEL_URL: $MODEL_URL"
 ----
 
 Then the token from the service account secret the deployment created:
@@ -441,6 +441,7 @@ Then the token from the service account secret the deployment created:
 [source,bash,role="execute"]
 ----
 TOKEN=$(oc get secret model-tester-redhatainvidia-nemotron-nano-9-sa -o jsonpath='{.data.token}' | base64 -d)
+echo "TOKEN: ${TOKEN:0:12}..."
 ----
 
 Finally, send a chat request:
@@ -459,7 +460,7 @@ curl -s $MODEL_URL/v1/chat/completions \
       }
     ],
     "max_tokens": 3072
-  }'
+  }' | jq .
 ----
 
 A successful response returns the assistant's answer in the
