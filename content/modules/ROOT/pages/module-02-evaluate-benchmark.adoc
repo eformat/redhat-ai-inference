@@ -98,11 +98,11 @@ evalhub health
 
 image::201b-cli-health.png[The evalhub CLI reporting the EvalHub service as healthy,link=self,window=blank,width=700]
 
-The `insecure` setting disables CLI TLS verification: the jumphost does not
-carry the cluster's certificate authority in its trust store, so the CLI
-cannot verify the service certificate. This is a lab-only convenience — a
-production setup would install the cluster CA into the client trust store
-instead.
+The `insecure` setting disables CLI TLS verification. The wetty terminal is
+itself a pod, so the CLI auto-detects its ServiceAccount CA — the rhpds
+cluster's certificate — as the trust bundle, and the lab's Let's Encrypt
+certificate does not chain to it. Lab-only convenience: a production setup
+would point the client at the correct CA instead.
 
 === Create the model authentication secret
 
