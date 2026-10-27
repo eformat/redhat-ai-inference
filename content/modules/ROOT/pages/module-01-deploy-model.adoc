@@ -215,8 +215,21 @@ gateway is covered in Module 3.
 *Service account name* field. The actual tokens are created and displayed
 when the model server is configured; you use the generated token in
 Exercise 3.
-.. Optional: expand *Additional runtime arguments* to add custom vLLM
-arguments such as the values listed in the configuration table below.
+.. Expand *Additional runtime arguments* and add the following vLLM
+arguments. The reasoning parser arguments enable the Nemotron reasoning
+output parser shipped inside the modelcar — without them the model's
+reasoning appears inline in every response instead of being separated from
+the answer:
+
+[source,role="copy"]
+----
+--max-model-len=131072
+--enable-auto-tool-choice
+--tool-call-parser=qwen3_coder
+--trust-remote-code
+--reasoning-parser-plugin=/mnt/models/nano_v3_reasoning_parser.py
+--reasoning-parser=nano_v3
+----
 .. Click *Next*.
 
 image::101-wizard-advanced.png[Advanced settings step with token authentication and runtime arguments,link=self,window=blank,width=700]
