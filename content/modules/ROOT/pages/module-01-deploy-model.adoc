@@ -436,6 +436,8 @@ MODEL_URL=$(oc get llminferenceservice redhatainvidia-nemotron-nano-9 -o jsonpat
 echo "MODEL_URL: $MODEL_URL"
 ----
 
+image::101-cli-endpoint.png[The terminal showing the model endpoint URL retrieved from the LLMInferenceService,link=self,window=blank,width=700]
+
 Then the token from the service account secret the deployment created:
 
 [source,bash,role="execute"]
@@ -443,6 +445,8 @@ Then the token from the service account secret the deployment created:
 TOKEN=$(oc get secret model-tester-redhatainvidia-nemotron-nano-9-sa -o jsonpath='{.data.token}' | base64 -d)
 echo "TOKEN: ${TOKEN:0:12}..."
 ----
+
+image::101-cli-token.png[The terminal showing the model authentication token as a short prefix,link=self,window=blank,width=700]
 
 Finally, send a chat request:
 
@@ -467,32 +471,9 @@ A successful response returns the assistant's answer in the
 OpenAI-compatible chat completion format. Because the deployment includes
 the `--reasoning-parser nemotron_v3` argument, the model's thinking is
 returned in a separate `reasoning` field, and `content` holds only the
-final answer (abbreviated for readability):
+final answer:
 
-----
-{
-  "id": "chatcmpl-f584f9ba-8c56-4567-a050-bd82afda14cc",
-  "object": "chat.completion",
-  "created": 1793069237,
-  "model": "redhatainvidia-nemotron-nano-9",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "reasoning": "Okay, the user is asking for a one-sentence explanation of \"Model as a Service.\" Let me start by breaking down the term. \"Model\" here likely refers to machine learning models. \"Service\" suggests a cloud-based or API-driven offering...",
-        "content": "Model as a Service is a cloud-based platform that provides pre-trained machine learning models via APIs, enabling users to deploy, manage, and scale AI solutions without building models from scratch."
-      },
-      "finish_reason": "stop"
-    }
-  ],
-  "usage": {
-    "prompt_tokens": 23,
-    "completion_tokens": 325,
-    "total_tokens": 348
-  }
-}
-----
+image::101-cli-inference.png[The terminal showing the full chat completion response with the reasoning field and the final content answer,link=self,window=blank,width=700]
 
 . Confirm the response contains a `choices` array with the assistant's
 message in `choices[0].message.content`.

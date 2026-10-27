@@ -85,7 +85,9 @@ evalhub config set token $(oc whoami -t)
 evalhub health
 ----
 
-`evalhub health` should report the service as healthy.
+`evalhub health` should report the service as healthy:
+
+image::201b-cli-health.png[The evalhub CLI reporting the EvalHub service as healthy,link=self,window=blank,width=700]
 
 === Create the model authentication secret
 
@@ -133,6 +135,8 @@ The server accepts the job and returns a job ID. Without the tokenizer
 parameter the job fails with `not a valid model identifier listed on
 huggingface.co` — always pass it for models served from a modelcar.
 
+image::202d-eval-submitted.png[The evalhub CLI confirming the evaluation job was submitted with a job ID,link=self,window=blank,width=700]
+
 === Monitor the run
 
 Each benchmark runs as an isolated Kubernetes job in your project. Watch the
@@ -157,18 +161,14 @@ Retrieve the benchmark scores:
 evalhub eval results <job_id> --format table
 ----
 
-----
-BENCHMARK      PROVIDER               METRIC    VALUE
-arc_easy       lm_evaluation_harness  acc       0.9
-arc_easy       lm_evaluation_harness  acc_norm  0.7
-truthfulqa_mc1 lm_evaluation_harness  acc       0.4
-----
+image::202e-eval-results.png[The evalhub CLI showing the benchmark results table with accuracy metrics for both benchmarks,link=self,window=blank,width=700]
 
 The `--format` flag supports `table`, `json`, `yaml`, and `csv`. The metrics
 depend on the benchmarks you ran: `acc` and `acc_norm` are multiple-choice
 accuracy (higher is better), `exact_match` scores math tasks. Ten examples
 gives a quick signal with high variance — treat these numbers as a baseline,
-not a verdict.
+not a verdict. The output also links the MLflow experiment where the run is
+tracked.
 
 == Exercise 3: Run an evaluation from the dashboard
 
@@ -297,6 +297,8 @@ Re-triggering the identical evaluation is then a single command:
 ----
 evalhub eval run --config evaljob.yaml
 ----
+
+image::204b-config-run.png[The evalhub CLI confirming the repeatable evaluation was submitted from the config file,link=self,window=blank,width=700]
 
 == Troubleshooting
 

@@ -167,6 +167,37 @@ placeholder URLs that do not match the 9B deployment. Rebuild: verify → write
       the benchmarks per run → Compare → the comparison view (Parallel
       Coordinates/Scatter/Box/Contour tabs)
 
+## Terminal-rendered CLI shots — module-01 retrofit (2026-10-27)
+
+- [x] MODULE-01 RETROFITTED for consistency: 3 terminal renders of the real
+      output — `101-cli-endpoint.png` (the MODEL_URL echo),
+      `101-cli-token.png` (the TOKEN echo, redacted to the 12-char prefix per
+      the redaction rules), `101-cli-inference.png` (the FULL chat completion
+      response — REPLACES the hand-abridged inline JSON, which violated the
+      never-fabricate rule). The inference render is tall (42 lines of real
+      jq-formatted JSON with the reasoning field).
+- [x] Antora build 0 errors, all image:: refs resolve.
+- [x] MEMORY NOTE STORED (Mike's standing instruction): all modules get
+      terminal-rendered CLI shots of the REAL output as we progress through
+      them — the zt-rhaibu workshop-screenshot pipeline (term.py). Modules 3,
+      4, 5, 6 remain.
+
+- [x] 4 terminal renders of the REAL captured output (the
+      workshop-screenshot skill pipeline: run the real command as the learner
+      → term.py render → serve → capture #term):
+      `201b-cli-health.png` (evalhub health), `202d-eval-submitted.png`
+      (the eval run output), `202e-eval-results.png` (the results table —
+      REPLACES the hand-formatted inline ASCII), `204b-config-run.png`
+      (the config-file run). Text verified against the real outputs via the
+      HTML source; job IDs from real runs (aaeaec58, 343c98c1).
+- [x] Embedded in module-02: Ex 1 (health), Ex 2 (submitted + results),
+      Ex 4 (config run). The results-table render also shows the MLflow
+      experiment link with the fixed /mlflow path.
+- [x] GOTCHA: an orphaned http.server hung (broken stdout pipe after the
+      parent shell exited) — kill the orphan and restart with nohup before
+      recapturing.
+- [x] Antora build 0 errors, all image:: refs resolve.
+
 ## Pending — rewrite module-02 (DONE — 2026-10-27)
 
 - [x] REWRITTEN: module-02-evaluate-benchmark.adoc 478 → ~300 lines, concise
