@@ -62,3 +62,42 @@ spec:
   oidcServer:
     tls:
       enabled: false
+---
+# The Authorino operator creates these two ClusterRoleBindings when it
+# reconciles the Authorino CR, but with ArgoCD prune they are wiped on every
+# sync (cluster-scoped objects outside the app manifest are pruned). Declared
+# here so ArgoCD owns them instead. Without them the authenticator cannot do
+# TokenReview, and every OpenShift-token request through the MaaS gateway
+# fails with 401 — including the dashboard's API-keys page.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: authorino-authorino
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: authorino-manager-role
+subjects:
+- kind: ServiceAccount
+  name: authorino-authorino
+  namespace: kuadrant-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: authorino-authorino-k8s-auth
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: authorino-manager-k8s-auth-role
+subjects:
+- kind: ServiceAccount
+  name: authorino-authorino
+  namespace: kuadrant-system

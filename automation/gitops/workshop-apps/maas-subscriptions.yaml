@@ -1,0 +1,54 @@
+# Module 3 — MaaS governance for the lab model. Pre-provisioned by automation;
+# the learner reviews them (oc get) and creates the API key in the dashboard.
+#
+# THIS OBJECT lives in `models-as-a-service`, NOT the workshop project: maas-api
+# only reads subscriptions from the namespace named by its
+# MAAS_SUBSCRIPTION_NAMESPACE env (models-as-a-service). A subscription applied
+# into any other namespace is silently ignored and /v1/models returns an empty
+# catalog.
+#
+# owner.groups is `system:authenticated:oauth` — the group the OpenShift
+# OAuth/OIDC identity actually presents to Authorino. Plain
+# `system:authenticated` never matches the generated AuthPolicy's
+# allowed_groups, so every call is denied (403).
+#
+# tokenMetadata feeds auth.identity.subscription_info.{costCenter,organizationId},
+# which the TelemetryPolicy references as MaaS token-metric labels. The CEL
+# label expressions are evaluated strictly: if costCenter/organizationId are
+# absent they resolve to null, the labeled descriptor fails to build, and
+# Limitador never records the authorized_hits counter — so the "Usage"
+# dashboard token panels stay empty. Placeholder values keep them valid.
+---
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSSubscription
+metadata:
+  name: maas-free-subscription
+  namespace: models-as-a-service
+spec:
+  owner:
+    groups:
+      - name: system:authenticated:oauth
+  tokenMetadata:
+    costCenter: na
+    organizationId: na
+  modelRefs:
+    - name: redhatainvidia-nemotron-nano-9
+      namespace: lab-user-dev
+      tokenRateLimits:
+        - limit: 20000
+          window: 1m
+        - limit: 1000
+          window: 1s
+---
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSAuthPolicy
+metadata:
+  name: maas-free-subscription-policy
+  namespace: models-as-a-service
+spec:
+  subjects:
+    groups:
+      - name: system:authenticated:oauth
+  modelRefs:
+    - name: redhatainvidia-nemotron-nano-9
+      namespace: lab-user-dev
