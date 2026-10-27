@@ -179,32 +179,20 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
 - [x] rac/ records updated: model-serving decision superseded to the 9B,
       architecture design + requirements on L4/9B
 
-## Open — router 504 on long completions (fix landed, needs push)
+## CLOSED (2026-10-27)
 
-- [x] FOUND (2026-10-27): non-streaming completions via the external URL
-      intermittently 504 ("Gateway Time-out") — the OpenShift router's default
-      30s backend timeout vs the 9B reasoning model: "What is 6 * 7?" takes
-      ~20s direct (434 completion tokens, finish: stop); under workshop load or
-      longer reasoning it tips past 30s. /v1/models is unaffected (fast).
-      Streaming clients never hit it (data flows continuously) — the risk is
-      the docs' Exercise 3 curl (max_tokens 3072, worst case ~150s on the L4).
-- [x] FIX: `haproxy.router.openshift.io/timeout: 300s` annotation added to
-      `inference-gateway-route` in
-      `automation/gitops/model-serving/templates/50-inference-gateway.yaml`
-      (lint clean, 9 resources).
-- [x] Push → sync → the Route gets the annotation → VERIFIED (2026-10-27):
-      `timeout: 300s` on `inference-gateway-route`, non-streaming curl through
-      the external URL works (finish: stop).
-      GOTCHA: pushing a HOOK-ONLY change does not trigger the automated sync —
-      hook resources are excluded from the diff, so the app stays "Synced" and
-      auto-sync never fires (the Job re-ran at 05:42 from the PREVIOUS commit,
-      `route unchanged`). Needed a manual sync via the Application CR
-      `operation` field pinned to the pushed revision → Job re-ran →
-      `route configured`.
-- [ ] Optional: same annotation on `maas-gateway-route` (45-maas-gateway.yaml)
+- [x] Optional: same annotation on `maas-gateway-route` (45-maas-gateway.yaml)
       — module 4's MaaS playground streams so it's safe, but a non-streaming
       curl against the MaaS gateway would hit the same 30s limit. Deviates
-      from the ph-deploy-configure-rhoai pool pattern — Mike's call.
+      from the ph-deploy-configure-rhoai pool pattern — DEFERRED, Mike's call
+      whenever MaaS non-streaming requests matter.
+
+---
+
+The 9B model switch is complete: docs, screenshots, args, the gateway external
+wiring, the router timeout, and the app-of-apps restructure — all verified.
+Module 2 (EvalHub) work continues in
+`qa/runs/redhat-ai-inference/module2-evalhub-checklist.md`.
 
 ## Open — module 2 (EvalHub) verify pass (2026-10-27)
 
@@ -258,8 +246,35 @@ Environment + flow findings, all verified live on the app-of-apps cluster:
       nvidia.com/gpu) AND the evalhub service marked the job FAILED with a
       stale "pod unschedulable" even though the pods scheduled and ran after
       the GC cleared the taint. Re-run clean on a healthy node.
-- [ ] Verify a full eval completes + results (arc_easy + truthfulqa_mc1,
-      num_examples 10) — IN PROGRESS, job bc375247-98dd-4a89-8291-4147b1a29651.
+- [x] Verify a full eval completes + results — VERIFIED (2026-10-27, job
+      48962059): submit as lab-user1 → pods run in lab-user-dev → benchmarks
+      complete → status events reach the server → State=completed. REAL
+      results: arc_easy acc 0.9 / acc_norm 0.7, truthfulqa_mc1 acc 0.4 (10
+      examples, stderr ~0.1-0.16). Runtime ~3.5 min end to end.
+- [x] MISSING-NETWORK-LABEL ROOT CAUSE (the "Pending forever" bug): the
+      redhat-ods-applications namespace-wide default-deny ingress policy only
+      allows from namespaces labeled `opendatahub.io/generated-namespace:
+      "true"` (dashboard-created projects), the ingress router, or monitoring.
+      lab-user-dev lacked that label → the eval pods' status-event POSTs to
+      the EvalHub service TIMED OUT (context deadline exceeded, sidecar
+      proxy.go:111) and the run stayed Pending in the dashboard even though
+      the K8s jobs Completed. FIX: label lab-user-dev
+      `opendatahub.io/generated-namespace=true` (same class as the 2026-10-25
+      dashboard-label gap). Added to `workshop-apps/namespace-labels.yaml` +
+      applied live. NOT a GPU scheduling issue — the eval pods are tiny
+      (adapter + sidecar, no GPU) and run on the worker.
+- [x] MLFLOW LOGGING BROKEN in this build: `--experiment` fails at submission
+      with "MLflow API error: Workspace context is required for this request"
+      (the EvalHub 1.0.2 server's experiment call lacks the workspace context
+      the RHOAI MLflow 3.15.2 requires — upstream integration gap); without
+      --experiment the results have mlflow_run_id: None. Affects Exercise 4's
+      MLflow comparison view + screenshot 204. NOT fixable from the workshop
+      side (the server binary is pinned in the image) — likely fixed in GA.
+      Module 2 rewrite: keep the repeatable YAML config part of Exercise 4,
+      gate/drop the MLflow comparison view.
+- [x] JUMPHOST: the evalhub CLI is NOT pre-installed — module 2 instructions
+      need `pip install --user eval-hub-sdk` (requires Python >= 3.11) as the
+      first step.
 - [ ] Verify the dashboard Evaluations page renders (was an error state on
       prelude2; EvalHub is Ready here) + the Start evaluation run dialog +
       results view + MLflow comparison view (screenshots 201-204).

@@ -120,7 +120,11 @@ spec:
   replicas: 1
   env:
     - name: MLFLOW_TRACKING_URI
-      value: "https://mlflow.redhat-ods-applications.svc.cluster.local:8443"
+      # NOTE: the /mlflow static prefix is REQUIRED — the RHOAI MLflow server
+      # (--static-prefix=/mlflow) only serves the REST API under /mlflow/api/.
+      # Without it the eval jobs' MLflow calls 404 and mlflow_run_id stays
+      # null (the runs never log to MLflow).
+      value: "https://mlflow.redhat-ods-applications.svc.cluster.local:8443/mlflow"
   database:
     type: sqlite
   providers:
