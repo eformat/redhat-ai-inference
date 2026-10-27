@@ -242,6 +242,13 @@ spec:
                 name: inference-gateway-route
                 labels:
                   gateway.networking.k8s.io/gateway-name: openshift-ai-inference
+                annotations:
+                  # The router's default 30s backend timeout 504s on
+                  # non-streaming completions: the 9B reasoning model can take
+                  # 20s+ of silence before the full response (docs curl uses
+                  # max_tokens 3072, worst case ~150s on the L4). Streaming
+                  # clients never hit it — data flows continuously.
+                  haproxy.router.openshift.io/timeout: 300s
               spec:
                 host: "${HOST}"
                 to:

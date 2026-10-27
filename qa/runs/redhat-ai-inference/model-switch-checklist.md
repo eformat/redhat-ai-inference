@@ -40,7 +40,7 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
       examples in docs should use higher budgets (e.g. 3072)
 - [x] `hy_v3` fallback not needed
 
-## Pending — app-of-apps restructure (DONE — migrated 2026-10-27)
+## App-of-apps restructure (DONE — migrated 2026-10-27)
 
 - [x] The 74-resource bootstrap-infra chart split into 6 functional Helm
       charts wired as an app-of-apps (`automation/gitops/app-of-apps/`):
@@ -63,7 +63,7 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
       `rhai-maas` for MaaS, etc. instead of the 74-resource wall.
 
 
-- [ ] Push chart changes: accelerator config rename + inference-gateway-status
+- [x] Push chart changes: accelerator config rename + inference-gateway-status
       Job (74 resources, lint clean)
 - [x] Chart pushed and synced: ArgoCD `bootstrap` app Synced/Healthy at the
       commit carrying the rename + Job; old `vllm-nvidia-l40s-gpu-single-node`
@@ -75,10 +75,11 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
       `inference-gateway.${DOMAIN}` (the maas-gateway precedent, same
       convention). Pending: push → sync → Job re-run → verify the hostname and
       the external URL resolves
-- [ ] Verify the external URL `https://inference-gateway.apps.<cluster-domain>/...`
-      resolves (curl + the dashboard's Deployments → Internal and external endpoint)
+- [x] Verify the external URL `https://inference-gateway.apps.<cluster-domain>/...`
+      resolves — VERIFIED END-TO-END (line 127 below) + re-confirmed after the
+      app-of-apps migration: `/v1/models` via the external URL → HTTP 200
 
-## Pending — screenshots (recaptured for the 9B flow)
+## Screenshots (recaptured for the 9B flow)
 
 - [x] Recaptured all 10 Module 1 screenshots at 1600x900 for the 9B flow:
       catalog (nemotron search + 9B card visible), 9B model card, wizard model
@@ -95,9 +96,9 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
 - [x] Redeployed the 9B via the wizard for real (name `nemotron-nano-9b-v2`,
       gpu-serving + vLLM NVIDIA GPU Single Node, model-tester SA, the 3 args,
       AI asset endpoint) — READY True again, inference smoke-tested OK
-- [ ] AFTER the hostname fix sync: recapture `101-inference-endpoint.png` —
-      the dialog's External API endpoint currently shows the double-apps
-      hostname; the corrected single-apps hostname changes it
+- [x] AFTER the hostname fix sync: recaptured `101-inference-endpoint.png`
+      (1600x900) with the correct external URL — superseded again by the full
+      maas-gateway pattern fix; final recapture at line 140 below
 - [x] SNI finding: once the Gateway listener has a hostname, connections with
       a different SNI are reset ("Connection reset by peer") — the dialog's
       Internal API endpoint (service-name SNI) does NOT work with a listener
@@ -147,9 +148,9 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
       Token authentication section with the token name + revealed secret
 
 
-## Pending — images + docs (needs the model sorted first)
+## Images + docs (all done)
 
-- [ ] Recapture Module 1 screenshots for the 9B flow:
+- [x] Recapture Module 1 screenshots for the 9B flow:
       `101-model-catalog.png` (nemotron-nano-9b search),
       `101-catalog-model-card.png` (9B card),
       `101-wizard-model-details.png` (9B modelcar URI:
@@ -157,6 +158,7 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
       `101-wizard-deployment.png` (gpu-serving + "vLLM NVIDIA GPU Single Node"),
       `101-wizard-advanced.png` (new args),
       `101-wizard-review.png`
+      (all 10 recaptured at 1600x900 — see the Screenshots section above)
 - [x] Module 1 "What the wizard creates": actual resource name
       (`redhatainvidia-nemotron-nano-9` — model-derived, truncated), modelcar
       URI (`rhelai1/...:1.5`), resources, args incl. the reasoning parser
@@ -176,3 +178,24 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
       (g6.2xlarge), ai_model_name filled with the 9B
 - [x] rac/ records updated: model-serving decision superseded to the 9B,
       architecture design + requirements on L4/9B
+
+## Open — router 504 on long completions (fix landed, needs push)
+
+- [x] FOUND (2026-10-27): non-streaming completions via the external URL
+      intermittently 504 ("Gateway Time-out") — the OpenShift router's default
+      30s backend timeout vs the 9B reasoning model: "What is 6 * 7?" takes
+      ~20s direct (434 completion tokens, finish: stop); under workshop load or
+      longer reasoning it tips past 30s. /v1/models is unaffected (fast).
+      Streaming clients never hit it (data flows continuously) — the risk is
+      the docs' Exercise 3 curl (max_tokens 3072, worst case ~150s on the L4).
+- [x] FIX: `haproxy.router.openshift.io/timeout: 300s` annotation added to
+      `inference-gateway-route` in
+      `automation/gitops/model-serving/templates/50-inference-gateway.yaml`
+      (lint clean, 9 resources).
+- [ ] Push → sync (`rhai-model-serving`) → the hook Job re-runs
+      (BeforeHookCreation) → the Route gets the annotation → re-verify a
+      non-streaming curl through the external URL.
+- [ ] Optional: same annotation on `maas-gateway-route` (45-maas-gateway.yaml)
+      — module 4's MaaS playground streams so it's safe, but a non-streaming
+      curl against the MaaS gateway would hit the same 30s limit. Deviates
+      from the ph-deploy-configure-rhoai pool pattern — Mike's call.
