@@ -40,12 +40,20 @@ data:
   # Service parameters the gateway controller renders from the Gateway's
   # infrastructure.parametersRef. The serving-cert annotation makes the
   # service-ca operator issue the gateway Service a TLS secret.
+  #
+  # LoadBalancer (not ClusterIP): a ClusterIP Service FORBIDS the
+  # status.loadBalancer.ingress patch ("may only be used when spec.type is
+  # 'LoadBalancer'") that wires the external hostname into
+  # gateway.status.addresses (the maas-default-gateway precedent — its
+  # Service is type LoadBalancer for exactly this reason). On AWS the cloud
+  # provider also provisions a real LB address; the Job's status patch then
+  # sets the Route hostname the KServe URLs derive from.
   service: |
     metadata:
       annotations:
         service.beta.openshift.io/serving-cert-secret-name: "openshift-ai-inference-service-tls"
     spec:
-      type: ClusterIP
+      type: LoadBalancer
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway

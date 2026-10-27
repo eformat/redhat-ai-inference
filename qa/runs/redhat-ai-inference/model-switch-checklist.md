@@ -95,10 +95,18 @@ the 9B model (11.6 GB, fits the lab's g6.2xlarge / L4 24 GB node).
       external hostname (reflected into gateway.status.addresses, which the
       KServe URL and the endpoints dialog derive from) and creates the Route.
       ClusterRole: gateways patch dropped, services/services-status added.
-- [ ] Pending: push → sync (the chart re-apply clears the stale listener
-      hostname; the Job re-runs the Service status patch + Route) → verify
-      gateway.status.addresses shows the external hostname → the LIS URL
-      updates → the docs' curl works end-to-end
+- [x] ClusterIP Service FORBIDS the status.loadBalancer.ingress patch
+      ("may only be used when spec.type is 'LoadBalancer'") — FIXED: the
+      chart's parametersRef ConfigMap (`openshift-ai-inference-config`)
+      service override is now `spec.type: LoadBalancer` (the maas
+      gateway's Service is LoadBalancer for exactly this reason). On AWS the
+      cloud provider also provisions a real LB address; the Job's status
+      patch then sets the Route hostname. reference:
+      ph-deploy-configure-rhoai/manifests/05-maas/gateway/{clusterip,loadbalancer}/
+- [ ] Pending: push → sync → the controller reconciles the Service to
+      LoadBalancer → the Job's status patch wires the external hostname into
+      gateway.status.addresses → the LIS URL updates → verify the docs' curl
+      end-to-end
 - [x] Exercise 3 split into 3 CLI steps: MODEL_URL from
       `oc get llminferenceservice -o jsonpath='{.status.url}'`, TOKEN from the
       deployment's `model-tester-<model>-sa` secret (base64 -d), then the curl —
