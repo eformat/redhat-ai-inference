@@ -4,3 +4,4 @@ www/
 node_modules/
 .playwright-cli/
 *.auth-state.json
+_pycache

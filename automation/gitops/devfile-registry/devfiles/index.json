@@ -1,0 +1,11 @@
+[
+  {
+    "displayName": "Module 4: MaaS Chat Client",
+    "description": "Python workspace pre-loaded with the maas-chat-client sample application for Module 4 of the Red Hat AI Inference workshop.",
+    "tags": ["Python", "MaaS"],
+    "icon": "/images/maas-chat-client.svg",
+    "links": {
+      "v2": "/devfiles/maas-chat-client.yaml"
+    }
+  }
+]

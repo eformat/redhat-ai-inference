@@ -11,9 +11,17 @@ PROMPT = os.environ.get("MAAS_PROMPT", "Explain Model-as-a-Service in one senten
 INTERVAL = int(os.environ.get("MAAS_INTERVAL", "0"))
 SYSTEM = "You are a concise assistant."
 
-def chat_completions(model, messages, max_tokens=256):
+def chat_completions(model, messages, max_tokens=1000):
     """POST one Chat Completions request and return the parsed response."""
-    payload = json.dumps({"model": model, "messages": messages, "max_tokens": max_tokens}).encode("utf-8")
+    # Nemotron Nano is a reasoning model: with thinking enabled the answer can
+    # stay in the reasoning field and content comes back null. This is one
+    # request parameter — not custom integration code.
+    payload = json.dumps({
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "chat_template_kwargs": {"enable_thinking": False},
+    }).encode("utf-8")
     request = urllib.request.Request(
         f"{API_URL}/v1/chat/completions", data=payload, method="POST",
         headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"})
@@ -30,11 +38,15 @@ def discover_model():
         raise RuntimeError("no ready models in the catalog — check Module 3")
     return ready[0]["id"]
 
+def response_content(completion):
+    """Return the answer text from a completion, handling reasoning models."""
+    message = completion["choices"][0].get("message", {})
+    return message.get("content") or message.get("reasoning") or ""
+
 def print_completion(completion):
     """Print one completion and its token usage."""
-    choice = completion["choices"][0]
     usage = completion.get("usage", {})
-    print(f"assistant> {choice['message']['content'].strip()}")
+    print(f"assistant> {response_content(completion).strip()}")
     print(f"[tokens: {usage.get('prompt_tokens', '?')} in / {usage.get('completion_tokens', '?')} out]")
 
 def run_interactive(model):
@@ -51,15 +63,18 @@ def run_interactive(model):
         messages = [{"role": "system", "content": SYSTEM}] + history + [{"role": "user", "content": user_input}]
         try:
             completion = chat_completions(model, messages)
+            print_completion(completion)
+            history += [{"role": "user", "content": user_input},
+                        {"role": "assistant", "content": response_content(completion)}]
         except urllib.error.HTTPError as exc:
             print(f"HTTP {exc.code}: {exc.reason} — check your endpoint URL and API key")
             continue
         except urllib.error.URLError as exc:
             print(f"endpoint unreachable: {exc}")
             continue
-        print_completion(completion)
-        history += [{"role": "user", "content": user_input},
-                    {"role": "assistant", "content": completion["choices"][0]["message"]["content"]}]
+        except Exception as exc:
+            print(f"request failed: {exc}")
+            continue
     print("Bye!")
 
 def run_request_loop(model):
@@ -74,6 +89,8 @@ def run_request_loop(model):
             print(f"HTTP {exc.code}: {exc.reason} — check your endpoint URL and API key")
         except urllib.error.URLError as exc:
             print(f"endpoint unreachable: {exc}")
+        except Exception as exc:
+            print(f"request failed: {exc}")
         time.sleep(INTERVAL)
 
 def main():

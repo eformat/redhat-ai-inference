@@ -21,6 +21,13 @@ spec:
     dashboard: {}
     metrics: {}
     pluginRegistry: {}
+    # Module 4 — the learner devfile registry. Served from the workshop repo
+    # itself (raw.githubusercontent.com, cluster-agnostic; the files live in
+    # automation/gitops/devfile-registry/). The sample appears on the Dev
+    # Spaces Create Workspace page.
+    devfileRegistry:
+      externalDevfileRegistries:
+        - url: https://raw.githubusercontent.com/rhpds/redhat-ai-inference/main/automation/gitops/devfile-registry
   devEnvironments:
     containerBuildConfiguration:
       openShiftSecurityContextConstraint: devworkspace-controller
