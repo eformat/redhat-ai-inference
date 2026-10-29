@@ -23,12 +23,12 @@ spec:
     pluginRegistry: {}
     # Module 4 — the learner devfile registry. Served from the workshop repo
     # itself (raw.githubusercontent.com, cluster-agnostic; the files live in
-    # automation/gitops/devfile-registry-v2/ — the -v2 suffix busts the raw
-    # CDN's stale cache for the old path). The sample appears on the Dev
-    # Spaces Create Workspace page.
+    # automation/gitops/devfile-registry-v3/ — the suffix bumps bust the raw
+    # CDN's stale cache, which lags pushes by many minutes on this path).
+    # The sample appears on the Dev Spaces Create Workspace page.
     devfileRegistry:
       externalDevfileRegistries:
-        - url: https://raw.githubusercontent.com/rhpds/redhat-ai-inference/main/automation/gitops/devfile-registry-v2
+        - url: https://raw.githubusercontent.com/rhpds/redhat-ai-inference/main/automation/gitops/devfile-registry-v3
   devEnvironments:
     containerBuildConfiguration:
       openShiftSecurityContextConstraint: devworkspace-controller
