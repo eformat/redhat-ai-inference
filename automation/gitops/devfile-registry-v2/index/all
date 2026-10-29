@@ -6,7 +6,7 @@
     "description": "Python workspace pre-loaded with the maas-chat-client sample application for Module 4 of the Red Hat AI Inference workshop.",
     "type": "sample",
     "tags": ["Python", "MaaS"],
-    "icon": "https://raw.githubusercontent.com/rhpds/redhat-ai-inference/main/automation/gitops/devfile-registry/images/maas-chat-client.svg",
+    "icon": "https://raw.githubusercontent.com/rhpds/redhat-ai-inference/main/automation/gitops/devfile-registry-v2/images/maas-chat-client.svg",
     "language": "Python",
     "projectType": "Python",
     "resources": [],
