@@ -75,6 +75,29 @@ Two bugs were killing the maas-chat-client pod:
       pre-clones → oc/python3 in the terminal → THEN rewrite module-04 Ex 1
       with the real flow + captures.
 
+## REGISTRY V2 API — the real contract (2026-10-30, discovered from registry.devfile.io)
+
+The sample APPEARED from devfiles/index.json (the OLD format) but sample
+CREATION failed: the dashboard ALSO fetches `{registry}/index/all` (404 on my
+registry) and on failure falls back to treating `links.v2` as a GIT REPO URL
+(it appended `.git` to the raw URL → clone 404 → a synthetic DevWorkspace with
+NO components + a bogus project named from the file). CONFIRMED working v2
+contract (from the real registry + the console error):
+
+- `/index/all` — the metadata list: entries have
+  `name, version, displayName, description, type (stack|sample), tags, icon,
+  language, projectType, resources, starterProjects, links: {self}, lastModified`
+- `/devfiles/{name}` — the DEVFILE CONTENT, matched by the entry's `name`
+  (no .yaml suffix — /devfiles/{name}.yaml 404s on the real registry)
+- /devfiles/index.json still drives the sample-card LIST for external
+  registries; /index/all drives the creation resolution.
+
+- [x] Registry layout fixed: index/all added (name maas-chat-client, type
+      sample), the devfile renamed to devfiles/maas-chat-client (name-matched
+      path), index.json links.v2 → /devfiles/maas-chat-client. PENDING:
+      Mike's commit + push → retest the sample creation (expect: the devfile
+      applies, the lean image, the repo cloned at /projects/redhat-ai-inference).
+
 ## GOTCHAS (this session)
 
 - **ArgoCD short-name gotcha AGAIN**: `oc get applications -A` resolves to the
