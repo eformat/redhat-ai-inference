@@ -5,7 +5,7 @@
     "tags": ["Python", "MaaS"],
     "icon": "https://raw.githubusercontent.com/rhpds/redhat-ai-inference/main/automation/gitops/devfile-registry/images/maas-chat-client.svg",
     "links": {
-      "v2": "/devfiles/maas-chat-client"
+      "v2": "https://github.com/rhpds/redhat-ai-inference"
     }
   }
 ]
