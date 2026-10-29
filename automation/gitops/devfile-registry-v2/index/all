@@ -12,7 +12,7 @@
     "resources": [],
     "starterProjects": [],
     "links": {
-      "self": "devfiles/maas-chat-client"
+      "self": "https://github.com/rhpds/redhat-ai-inference"
     }
   }
 ]
