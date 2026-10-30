@@ -70,10 +70,51 @@ Two bugs were killing the maas-chat-client pod:
   showroom pod; ~1/3 of UDI so no disk-pressure), mountSources /projects,
   `projects:` section clones rhpds/redhat-ai-inference from main, trust
   prompt disabled via che-code vscode-preferences.
-- [ ] AFTER Mike pushes: ArgoCD rhai-rhoai syncs → verify the sample appears
-      on the Create Workspace page as lab-user1 → create it → the repo
-      pre-clones → oc/python3 in the terminal → THEN rewrite module-04 Ex 1
-      with the real flow + captures.
+## RESOLVED — the workspace WORKS (2026-10-30, after ~8 push cycles)
+
+- [x] **The root cause of every FailedPostStartHook**: the DWO injects its own
+      che-code postStart hook (nohup /checode/entrypoint-volume.sh) on the
+      tool container. Third-party images (ubi9/python-311) fail it — the
+      hook's log redirect /checode/entrypoint-logs.txt hits a permission wall
+      (the injector runs as root, creates the PVC dirs root:1001060000; the
+      container: uid=1001060000 gid=0, no fsGroup, no supplemental group ->
+      read-only on its own workspace). NOT fixable from the devfile:
+      storage-type per-user/per-workspace both failed; pod-overrides
+      supplementalGroups would have required hardcoding the namespace UID.
+- [x] **THE ANSWER (Mike: "you must be missing something - search web")**: use
+      Red Hat's UDI (registry.redhat.io/devspaces/udi-rhel9) — the same image
+      every built-in Dev Spaces sample uses, BUILT for the che-code hook.
+      VERIFIED: the built-in Python sample ran fine (the decisive test); the
+      UDI has oc 4.18, python3, curl, git, jq preinstalled (no oc-install
+      step needed); the pull secret covers registry.redhat.io.
+- [x] FINAL learner devfile (repo root devfile.yaml + the -v3 registry copy,
+      identical): UDI image, mountSources /projects, the projects section
+      cloning rhpds/redhat-ai-inference from main, the trust prompt disabled.
+      NO hardcoding (the image path is a registry path, not an env value).
+- [x] **The workspace WORKS**: maas-chat-client-ef3d Running 2/2, the IDE URL
+      live, /projects/redhat-ai-inference pre-cloned, all tools present.
+- [x] **Debug techniques that worked** (for the checklist):
+  - The DevWorkspace's annotations reveal the resolved devfile + the factory
+    params (che.eclipse.org/devfile + devfile-source).
+  - The performance entries in the browser show which registry URLs the
+    dashboard actually fetched (it NEVER fetched the -v2/-v3 index until
+    localStorage was cleared — the dashboard caches the sample data in
+    localStorage, surviving context restarts).
+  - The dashboard's sample-creation flow: links.v2 (index.json) drives the
+    CARD LIST; the /index/all entry's links.self drives the CREATION
+    resolution (relative links resolve against the registry base's PARENT —
+    both must be the ABSOLUTE repo URL).
+  - The raw CDN (bne edge) lags pushes by 10-25+ min on the same path;
+    query params and etag revalidation are normalized away — a PATH bump
+    (the -v2/-v3 dir renames) is the only reliable cache bust.
+  - quay.io/rhpds/openshowroom-terminal-ocp went PRIVATE (401, 0 tags) —
+    third-party image pulls need verification at AUTHORING time, not just
+    repo visibility.
+- [ ] NEXT: the module-04 docs rewrite with the real flow (the sample on the
+      Create Workspace page -> the workspace with the repo pre-cloned), the
+      real screenshots (401: the sample card; 402: the IDE open), the source
+      block already synced to the fixed client, the real pod-log output
+      captured (assistant> ... [tokens: 29 in / 38 out]).
 
 ## REGISTRY V2 API — the real contract (2026-10-30, discovered from registry.devfile.io)
 

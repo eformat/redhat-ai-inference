@@ -50,14 +50,16 @@ running on your cluster:
 . From the OpenShift console, click the Application Launcher (waffle menu in
 the masthead) and select *Red Hat OpenShift Dev Spaces*, logging in with the
 same lab credentials if prompted.
-. On the Dev Spaces dashboard, locate the prepared workshop workspace — a
-pre-cloned VS Code workspace with dependencies configured — and click *Open*.
-. When the VS Code interface opens in your browser, accept the *Trust the
-authors* prompt if it appears.
+. On the Dev Spaces dashboard, click *Create Workspace*. The workshop's
+prepared *Module 4: MaaS Chat Client* sample appears in the sample list —
+click it.
+. Dev Spaces starts the workspace with the lab repository pre-cloned and the
+IDE opens in your browser. If the editor opens in Restricted Mode, click
+*Trust* to enable all features.
 
-image::401-dev-spaces-open.png[Dev Spaces dashboard with the prepared workshop workspace,link=self,window=blank,width=700]
+image::401-dev-spaces-create-workspace.png[Dev Spaces Create Workspace page showing the Module 4: MaaS Chat Client sample,link=self,window=blank,width=700]
 
-image::402-workspace-trust.png[VS Code workspace with the Trust the authors prompt,link=self,window=blank,width=700]
+image::402-workspace-ide-open.png[Workspace IDE open with the lab repository pre-cloned,link=self,window=blank,width=700]
 
 [NOTE]
 ====
@@ -120,9 +122,17 @@ PROMPT = os.environ.get("MAAS_PROMPT", "Explain Model-as-a-Service in one senten
 INTERVAL = int(os.environ.get("MAAS_INTERVAL", "0"))
 SYSTEM = "You are a concise assistant."
 
-def chat_completions(model, messages, max_tokens=256):
+def chat_completions(model, messages, max_tokens=1000):
     """POST one Chat Completions request and return the parsed response."""
-    payload = json.dumps({"model": model, "messages": messages, "max_tokens": max_tokens}).encode("utf-8")
+    # Nemotron Nano is a reasoning model: with thinking enabled the answer can
+    # stay in the reasoning field and content comes back null. This is one
+    # request parameter — not custom integration code.
+    payload = json.dumps({
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "chat_template_kwargs": {"enable_thinking": False},
+    }).encode("utf-8")
     request = urllib.request.Request(
         f"{API_URL}/v1/chat/completions", data=payload, method="POST",
         headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"})
@@ -139,11 +149,15 @@ def discover_model():
         raise RuntimeError("no ready models in the catalog — check Module 3")
     return ready[0]["id"]
 
+def response_content(completion):
+    """Return the answer text from a completion, handling reasoning models."""
+    message = completion["choices"][0].get("message", {})
+    return message.get("content") or message.get("reasoning") or ""
+
 def print_completion(completion):
     """Print one completion and its token usage."""
-    choice = completion["choices"][0]
     usage = completion.get("usage", {})
-    print(f"assistant> {choice['message']['content'].strip()}")
+    print(f"assistant> {response_content(completion).strip()}")
     print(f"[tokens: {usage.get('prompt_tokens', '?')} in / {usage.get('completion_tokens', '?')} out]")
 
 def run_interactive(model):
@@ -160,15 +174,18 @@ def run_interactive(model):
         messages = [{"role": "system", "content": SYSTEM}] + history + [{"role": "user", "content": user_input}]
         try:
             completion = chat_completions(model, messages)
+            print_completion(completion)
+            history += [{"role": "user", "content": user_input},
+                        {"role": "assistant", "content": response_content(completion)}]
         except urllib.error.HTTPError as exc:
             print(f"HTTP {exc.code}: {exc.reason} — check your endpoint URL and API key")
             continue
         except urllib.error.URLError as exc:
             print(f"endpoint unreachable: {exc}")
             continue
-        print_completion(completion)
-        history += [{"role": "user", "content": user_input},
-                    {"role": "assistant", "content": completion["choices"][0]["message"]["content"]}]
+        except Exception as exc:
+            print(f"request failed: {exc}")
+            continue
     print("Bye!")
 
 def run_request_loop(model):
@@ -183,6 +200,8 @@ def run_request_loop(model):
             print(f"HTTP {exc.code}: {exc.reason} — check your endpoint URL and API key")
         except urllib.error.URLError as exc:
             print(f"endpoint unreachable: {exc}")
+        except Exception as exc:
+            print(f"request failed: {exc}")
         time.sleep(INTERVAL)
 
 def main():
@@ -432,8 +451,8 @@ prompts you. Type a request and observe the response:
 
 ----
 you> Explain what Model-as-a-Service is in one sentence.
-assistant> Model-as-a-Service exposes a deployed model through a governed API endpoint, so multiple teams can consume it with standard API calls and centralized quotas.
-[tokens: 16 in / 25 out]
+assistant> Model-as-a-Service is a cloud-based solution offering pre-trained machine learning models for quick deployment and integration into applications.
+[tokens: 31 in / 25 out]
 ----
 
 Every exchange is a Chat Completions request against the MaaS endpoint, and
@@ -455,8 +474,8 @@ Expected output:
 
 ----
 Request loop started — one completion every 30s.
-assistant> Model-as-a-Service publishes a deployed model as a shared, subscription-governed API endpoint on the cluster.
-[tokens: 12 in / 21 out]
+assistant> Model-as-a-Service refers to a cloud-based solution where users can access, deploy, and manage machine learning models through an API, without needing to build or maintain the underlying infrastructure.
+[tokens: 29 in / 38 out]
 ----
 
 This confirms the application successfully consumes the MaaS endpoint from
