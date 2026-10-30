@@ -2,7 +2,7 @@ schemaVersion: 2.2.0
 metadata:
   name: maas-chat-client
   displayName: "Module 4: MaaS Chat Client"
-  description: "Python workspace pre-loaded with the maas-chat-client sample application for Module 4 of the Red Hat AI Inference workshop."
+  description: "Python workspace pre-loaded with the maas-chat-client sample application for Module 4 of the Red Hat AI Inference workshop. Install the oc CLI with the setup command in Module 4 Exercise 1."
 attributes:
   che-code.eclipse.org/vscode-preferences:
     security.workspace.trust.enabled: false
@@ -17,21 +17,6 @@ components:
       cpuRequest: 500m
       mountSources: true
       sourceMapping: /projects
-commands:
-  - id: install-oc
-    exec:
-      component: maas-client-tools
-      commandLine: |
-        mkdir -p $HOME/.local/bin
-        curl -fsSL https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz -o /tmp/oc.tar.gz
-        tar -xzf /tmp/oc.tar.gz -C $HOME/.local/bin oc kubectl
-        rm -f /tmp/oc.tar.gz
-        oc version --client
-      workingDir: /projects
-      label: "Install the oc CLI"
-events:
-  postStart:
-    - install-oc
 projects:
   - name: redhat-ai-inference
     git:
