@@ -325,8 +325,8 @@ oc get pods
 
 ----
 NAME                                               READY   STATUS    RESTARTS   AGE
-redhatainvidia-nemotron-nano-9-kserve-7d9f8b6c5-k2p9q  1/1     Running   0          55m
-redhatainvidia-nemotron-nano-9-kserve-7d9f8b6c5-t4mzn  1/1     Running   0          50m
+redhataigpt-oss-20b-essential-kserve-78ccb7d7bf-m8bzp  1/1     Running   0          55m
+redhataigpt-oss-20b-essential-kserve-78ccb7d7bf-t4mzn  1/1     Running   0          50m
 ----
 
 [NOTE]

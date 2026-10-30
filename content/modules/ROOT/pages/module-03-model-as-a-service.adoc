@@ -85,7 +85,7 @@ verify API names against your installed version.
 
 .7 minutes
 
-The model you deployed in Module 1 — `redhatainvidia-nemotron-nano-9`, serving
+The model you deployed in Module 1 — `redhataigpt-oss-20b-essential`, serving
 on the NVIDIA L4 GPU node in your project — is attached to the direct-serving
 gateway for single-team access. Publishing it to MaaS takes two steps: attach
 the model's route to the shared MaaS gateway, then register the model with a
@@ -94,7 +94,7 @@ the model's route to the shared MaaS gateway, then register the model with a
 Review the serving configuration for the deployed model:
 
 . In the OpenShift AI console, navigate to *Projects* and open your project.
-. Click the *Deployments* tab and locate `redhatainvidia-nemotron-nano-9`.
+. Click the *Deployments* tab and locate `redhataigpt-oss-20b-essential`.
 . Confirm the model row shows *Ready* in the *Status* column.
 
 Attach the model's route to the shared MaaS gateway by patching the
@@ -102,7 +102,7 @@ Attach the model's route to the shared MaaS gateway by patching the
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-oc patch llminferenceservice redhatainvidia-nemotron-nano-9 -n {project_namespace} --type merge \
+oc patch llminferenceservice redhataigpt-oss-20b-essential -n {project_namespace} --type merge \
   -p '{"spec":{"router":{"gateway":{"refs":[{"name":"maas-default-gateway","namespace":"openshift-ingress"}],"route":{}}}}}'
 ----
 
@@ -118,12 +118,12 @@ cat <<'EOF' | oc apply -f -
 apiVersion: maas.opendatahub.io/v1alpha1
 kind: MaaSModelRef
 metadata:
-  name: redhatainvidia-nemotron-nano-9
+  name: redhataigpt-oss-20b-essential
   namespace: {project_namespace}
 spec:
   modelRef:
     kind: LLMInferenceService
-    name: redhatainvidia-nemotron-nano-9
+    name: redhataigpt-oss-20b-essential
   tenantRef: models-as-a-service
 EOF
 ----
@@ -149,7 +149,7 @@ in Exercise 3 when the subscription pairing activates.
 The model also appears on the shared service surface consumers use:
 
 . In the console, navigate to *Gen AI studio → AI asset endpoints*.
-. On the *Models* tab, locate `publishers/{project_namespace}/models/redhatainvidia-nemotron-nano-9`.
+. On the *Models* tab, locate `publishers/{project_namespace}/models/redhataigpt-oss-20b-essential`.
 The row shows *Ready* with *View* in the *Endpoints* column.
 . Click *View* to open the *Endpoints* dialog. The dialog shows a *Model as a
 Service* badge, your subscription, and the external API endpoint URL.
@@ -199,7 +199,7 @@ image::304b-subscriptions-active.png[The subscription and authorization policy A
 
 The same pairing is visible in the console. Navigate to *Settings → MaaS
 governance*: the *Overview* tab lists each published model with its
-subscription and authorization policy pairing — `redhatainvidia-nemotron-nano-9`
+subscription and authorization policy pairing — `redhataigpt-oss-20b-essential`
 shows *Ready* with 1 subscription and 1 authorization policy. Use *Create
 subscription* and *Create authorization policy* on this page to add tiers.
 
@@ -286,7 +286,7 @@ Scale the model to two replicas:
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-oc patch llminferenceservice redhatainvidia-nemotron-nano-9 -n {project_namespace} --type merge \
+oc patch llminferenceservice redhataigpt-oss-20b-essential -n {project_namespace} --type merge \
   -p '{"spec":{"replicas":2}}'
 ----
 
@@ -301,8 +301,8 @@ Expected output:
 
 ----
 NAME                                            READY   STATUS            RESTARTS   AGE
-redhatainvidia-nemotron-nano-9-kserve-6ccdd4bddc-krgvf   2/2   Running           0          5h24m
-redhatainvidia-nemotron-nano-9-kserve-6ccdd4bddc-mk8xd   0/2   SchedulingGated   0          10s
+redhataigpt-oss-20b-essential-kserve-6ccdd4bddc-krgvf   2/2   Running           0          5h24m
+redhataigpt-oss-20b-essential-kserve-6ccdd4bddc-mk8xd   0/2   SchedulingGated   0          10s
 ----
 
 Pod names vary. In this lab the second pod stays `SchedulingGated`: the GPU
@@ -315,7 +315,7 @@ Scale back to one replica and delete the gated pod's request:
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-oc patch llminferenceservice redhatainvidia-nemotron-nano-9 -n {project_namespace} --type merge \
+oc patch llminferenceservice redhataigpt-oss-20b-essential -n {project_namespace} --type merge \
   -p '{"spec":{"replicas":1}}'
 ----
 
@@ -334,7 +334,7 @@ pairing — the `MaaSModelRef` status conditions must all report `True`:
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-oc get maasmodelref redhatainvidia-nemotron-nano-9 -n {project_namespace} -o json \
+oc get maasmodelref redhataigpt-oss-20b-essential -n {project_namespace} -o json \
   | jq -r '.status.conditions[] | "\(.type)=\(.status)"'
 ----
 
@@ -364,7 +364,7 @@ OpenAI-compatible JSON format:
 image::306c-maas-models.png[The /v1/models response listing the published model with its subscription,link=self,window=blank,width=800]
 
 Export the model ID from the catalog — request bodies must use the full ID
-returned by `/v1/models` (`publishers/{project_namespace}/models/redhatainvidia-nemotron-nano-9`):
+returned by `/v1/models` (`publishers/{project_namespace}/models/redhataigpt-oss-20b-essential`):
 
 [source,bash,role="execute"]
 ----
@@ -387,12 +387,11 @@ curl -s "${MAAS_URL}/v1/chat/completions" \
 ----
 
 A successful response returns HTTP 200 with a completion in OpenAI-compatible
-format. `Nemotron Nano 9B v2` is a reasoning model: the model thinks before it
-answers, so with a bounded `max_tokens` the response carries the model's
-reasoning in the `reasoning` field, `content` is still `null`, and
-`finish_reason` is `length`:
+format. GPT-OSS handles reasoning natively through its harmony response
+format: the model thinks before it answers, so the response carries the
+model's thinking in the `reasoning` field and the final answer in `content`:
 
-image::306d-maas-inference.png[The /v1/chat/completions response with the reasoning field and finish_reason length,link=self,window=blank,width=800]
+image::306d-maas-inference.png[The /v1/chat/completions response with the reasoning field and the final content answer,link=self,window=blank,width=800]
 
 Note the `model` field echoes the short model name, while request bodies use
 the full `publishers/<project>/<model>` ID from the catalog.
