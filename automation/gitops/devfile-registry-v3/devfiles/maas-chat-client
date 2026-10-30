@@ -6,6 +6,11 @@ metadata:
 attributes:
   che-code.eclipse.org/vscode-preferences:
     security.workspace.trust.enabled: false
+  # per-workspace storage: the PVC is this workspace's own root. The per-user
+  # type lays data out under <workspace-id>/ on a shared PVC while mounting
+  # the root — the che-code entrypoint hook then 404s and the workspace
+  # fails to start.
+  controller.devfile.io/storage-type: per-workspace
 components:
   - name: maas-client-tools
     container:
