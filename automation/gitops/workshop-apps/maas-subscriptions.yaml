@@ -32,7 +32,7 @@ spec:
     costCenter: na
     organizationId: na
   modelRefs:
-    - name: redhatainvidia-nemotron-nano-9
+    - name: redhataigpt-oss-20b-essential
       namespace: lab-user-dev
       tokenRateLimits:
         - limit: 20000
@@ -50,5 +50,5 @@ spec:
     groups:
       - name: system:authenticated:oauth
   modelRefs:
-    - name: redhatainvidia-nemotron-nano-9
+    - name: redhataigpt-oss-20b-essential
       namespace: lab-user-dev
