@@ -15,7 +15,10 @@ resources:
   - namespace-labels.yaml
   - model-serviceaccount.yaml
   - maas-chat-client.yaml
-  - maas-subscriptions.yaml
+  # maas-subscriptions.yaml MIGRATED to automation/gitops/maas-tier (ArgoCD
+  # `rhai-maas-tier` app, wave 6) — the MaaS governance tier is env-provisioned
+  # (learners have no RBAC in models-as-a-service), so it is GitOps-managed now.
+  # Do not re-add it here.
   # TEMPLATED — substitute a freshly minted MaaS API key before enabling (see README.md):
   # - maas-credentials-secret.yaml
 # devspaces.yaml and observability.yaml MIGRATED to the bootstrap-infra Helm

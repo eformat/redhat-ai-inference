@@ -13,7 +13,7 @@ here is lab-scoped and applied manually with `oc apply -k`.
 | `kueue-localqueue.yaml` | M1 — model deployment admission | LocalQueue `default` → ClusterQueue `default` (bootstrap-infra chart) — without it the LLMInferenceService sits Inadmissible "Queue default queue does not exist" (the dashboard-created project is auto-labelled kueue-managed) |
 | `model-serviceaccount.yaml` | M1/M3 — model token minting, MaaS calls | `model-tester` SA used to mint model tokens |
 | `maas-chat-client.yaml` | M4 — 404/405/502 | code ConfigMap + Deployment, mirrored from `qa-automation/e2e.yml` M4 |
-| `maas-subscriptions.yaml` | M3 — MaaS governance | MaaSSubscription + MaaSAuthPolicy in `models-as-a-service` (maas-api's MAAS_SUBSCRIPTION_NAMESPACE), owner group `system:authenticated:oauth`, modelRefs → the lab model — without them every MaaS call is 403 (no subscription/authpolicy pair) |
+| `maas-subscriptions.yaml` | ~~M3~~ — **MIGRATED** | MaaSSubscription + MaaSAuthPolicy now live in `automation/gitops/maas-tier` (ArgoCD `rhai-maas-tier` app, wave 6) — learners have no RBAC in `models-as-a-service`, so the tier must be env-provisioned, and a manual apply went stale on the gpt-oss model switch. Not part of the manual apply anymore |
 | `maas-credentials-secret.yaml` | M4 — 405/502 | **TEMPLATED** — substitute a freshly minted MaaS API key before enabling |
 
 `devspaces.yaml` and `observability.yaml` **migrated** to the `bootstrap-infra`
@@ -35,7 +35,9 @@ oc apply -k automation/gitops/workshop-apps
 ```
 
 The platform prerequisites themselves are NOT applied here — they come from the
-`bootstrap-infra` Helm chart via the ArgoCD `bootstrap` app on the lab cluster.
+six functional charts wired as an app-of-apps (`automation/gitops/app-of-apps/`,
+ArgoCD `bootstrap` app on the lab cluster), and the MaaS governance tier comes
+from the `maas-tier` chart (`rhai-maas-tier` app, wave 6).
 
 ## Secrets
 

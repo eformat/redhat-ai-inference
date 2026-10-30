@@ -1,0 +1,48 @@
+# Module 3 — MaaS governance tier for the lab model. Provisioned by this chart
+# (ArgoCD app rhai-maas-tier, wave 6); the learner only reviews them (oc get in
+# module-03) and creates the API key in the dashboard. Learners have NO RBAC to
+# create in models-as-a-service, so the tier can never be a learner step.
+#
+# Migrated from automation/gitops/workshop-apps/maas-subscriptions.yaml: the
+# former delivery was a one-shot manual `oc apply -k workshop-apps` (instructor
+# runbook in that README), which went stale on the gpt-oss model switch — the
+# cluster kept the old nemotron modelRefs and every MaaS call failed with
+# "no matching subscription found for user". This chart makes the tier
+# first-run automatic on every fresh environment.
+#
+# THIS OBJECT lives in `models-as-a-service`, NOT the workshop project: maas-api
+# only reads subscriptions from the namespace named by its
+# MAAS_SUBSCRIPTION_NAMESPACE env (models-as-a-service). A subscription applied
+# into any other namespace is silently ignored and /v1/models returns an empty
+# catalog.
+---
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSSubscription
+metadata:
+  name: maas-free-subscription
+  namespace: models-as-a-service
+spec:
+  owner:
+    groups:
+      - name: {{ .Values.tier.ownerGroup }}
+  tokenMetadata:
+    costCenter: {{ .Values.tier.tokenMetadata.costCenter }}
+    organizationId: {{ .Values.tier.tokenMetadata.organizationId }}
+  modelRefs:
+    - name: {{ .Values.tier.model }}
+      namespace: {{ .Values.tier.modelNamespace }}
+      tokenRateLimits:
+        {{- toYaml .Values.tier.rateLimits | nindent 8 }}
+---
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSAuthPolicy
+metadata:
+  name: maas-free-subscription-policy
+  namespace: models-as-a-service
+spec:
+  subjects:
+    groups:
+      - name: {{ .Values.tier.ownerGroup }}
+  modelRefs:
+    - name: {{ .Values.tier.model }}
+      namespace: {{ .Values.tier.modelNamespace }}

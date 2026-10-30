@@ -1,0 +1,6 @@
+apiVersion: v2
+name: maas-tier
+description: MaaS governance tier — lab-model subscription + authpolicy in models-as-a-service (Module 3)
+type: application
+version: 1.0.0
+appVersion: "3.6-ea2"

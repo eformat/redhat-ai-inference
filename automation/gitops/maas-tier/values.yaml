@@ -1,0 +1,31 @@
+# MaaS governance tier (Module 3). The subscription + authpolicy pair MUST live
+# in models-as-a-service — maas-api only reads subscriptions from the namespace
+# named by its MAAS_SUBSCRIPTION_NAMESPACE env. Learners have NO RBAC to create
+# here (oc auth can-i create maassubscriptions --as=lab-user1 -> no), so the
+# tier is provisioned by this chart, never the learner flow.
+tier:
+  # The lab model (Module 1 deployment + Module 3 MaaSModelRef). The
+  # subscription is intentionally Failed until Module 3 — it references the
+  # student's MaaSModelRef, which only exists after the Module 3 router patch
+  # and MaaSModelRef apply. The maas-controller keeps reconciling and the tier
+  # converges (Failed -> Ready) when the modelRef lands.
+  model: redhataigpt-oss-20b-essential
+  modelNamespace: lab-user-dev
+  # The group the OpenShift OAuth/OIDC identity actually presents to Authorino.
+  # Plain system:authenticated never matches the generated AuthPolicy's
+  # allowed_groups, so every call is denied (403).
+  ownerGroup: system:authenticated:oauth
+  rateLimits:
+    - limit: 20000
+      window: 1m
+    - limit: 1000
+      window: 1s
+  # Feeds auth.identity.subscription_info.{costCenter,organizationId} — the
+  # TelemetryPolicy references these as MaaS token-metric labels. The CEL label
+  # expressions are evaluated strictly: absent values resolve to null, the
+  # labeled descriptor fails to build, and Limitador never records the
+  # authorized_hits counter — so the "Usage" dashboard token panels stay empty.
+  # Placeholder values keep them valid.
+  tokenMetadata:
+    costCenter: na
+    organizationId: na

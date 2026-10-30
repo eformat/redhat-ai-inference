@@ -13,6 +13,7 @@ as an app-of-apps. The root application (named `bootstrap`) points at
 | `rhai-maas` | `maas/` | 3 | 21 | Postgres DB, maas-default-gateway + status Job, MLflow, EvalHub, Kuadrant/Authorino, TelemetryPolicy |
 | `rhai-model-serving` | `model-serving/` | 4 | 9 | gpu-serving HardwareProfile, accelerator config, openshift-ai-inference gateway |
 | `rhai-observability` | `observability/` | 5 | 2 | Perses datasource, network policy |
+| `rhai-maas-tier` | `maas-tier/` | 6 | 2 | MaaS governance tier — lab-model subscription + authpolicy in `models-as-a-service` (Failed until Module 3, converges when the student's MaaSModelRef lands; learners have no RBAC to create here, so the tier is provisioned, never a learner step) |
 
 Each child chart is a self-contained Helm chart (`Chart.yaml` + `values.yaml` +
 `templates/`). Knobs live in each chart's `values.yaml` (operators: the catalog
