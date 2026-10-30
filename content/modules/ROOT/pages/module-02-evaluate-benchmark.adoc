@@ -113,7 +113,7 @@ under the `api-key` key:
 
 [source,bash,role="execute"]
 ----
-TOKEN=$(oc get secret model-tester-redhatainvidia-nemotron-nano-9-sa -o jsonpath='{.data.token}' | base64 -d)
+TOKEN=$(oc get secret model-tester-redhataigpt-oss-20b-essential-sa -o jsonpath='{.data.token}' | base64 -d)
 oc create secret generic model-auth --from-literal=api-key=$TOKEN
 ----
 
@@ -133,16 +133,16 @@ identifier, so the runtime cannot infer it:
 
 [source,bash,role="execute"]
 ----
-MODEL_URL=$(oc get llminferenceservice redhatainvidia-nemotron-nano-9 -o jsonpath='{.status.url}')
+MODEL_URL=$(oc get llminferenceservice redhataigpt-oss-20b-essential -o jsonpath='{.status.url}')
 evalhub eval run \
-  --name nemotron-9-baseline \
+  --name gpt-oss-20b-baseline \
   --model-url $MODEL_URL/v1 \
-  --model-name redhatainvidia-nemotron-nano-9 \
+  --model-name redhataigpt-oss-20b-essential \
   --provider lm_evaluation_harness \
   -b arc_easy -b truthfulqa_mc1 \
   --model-auth-secret model-auth \
   --param num_examples=10 \
-  --param tokenizer=nvidia/NVIDIA-Nemotron-Nano-9B-v2
+  --param tokenizer=openai/gpt-oss-20b
 ----
 
 The server accepts the job and returns a job ID, and logs the run to an MLflow
@@ -204,12 +204,12 @@ or category to find one).
 . Fill the run configuration:
 +
 --
-* *Evaluation name*: a unique name, such as `nemotron-9-recheck`.
+* *Evaluation name*: a unique name, such as `gpt-oss-20b-recheck`.
 * *MLflow experiment*: accept the default — results are logged as runs
 within the experiment, named after the evaluation.
 * *Evaluating*: *Model*, then *Choose model* and select *Other (External
 endpoint)*.
-* *Model name*: `redhatainvidia-nemotron-nano-9` (case-sensitive).
+* *Model name*: `redhataigpt-oss-20b-essential` (case-sensitive).
 * *Endpoint URL*: the gateway endpoint from Exercise 2
 (`$MODEL_URL/v1`).
 * *Authentication secret name*: `model-auth`. Click *Validate connection* —
@@ -222,7 +222,7 @@ same parameter the CLI required:
 ----
 {
   "num_examples": 10,
-  "tokenizer": "nvidia/NVIDIA-Nemotron-Nano-9B-v2"
+  "tokenizer": "openai/gpt-oss-20b"
 }
 ----
 --
@@ -288,10 +288,10 @@ different serving configuration:
 [source,yaml,subs="specialcharacters,attributes"]
 ----
 # evaljob.yaml — repeatable evaluation configuration
-name: nemotron-9-baseline
+name: gpt-oss-20b-baseline
 model:
-  url: {inference_gateway_url}/{project_namespace}/redhatainvidia-nemotron-nano-9/v1
-  name: redhatainvidia-nemotron-nano-9
+  url: {inference_gateway_url}/{project_namespace}/redhataigpt-oss-20b-essential/v1
+  name: redhataigpt-oss-20b-essential
   auth:
     secret_ref: model-auth
 benchmarks:
@@ -301,7 +301,7 @@ benchmarks:
     id: truthfulqa_mc1
 parameters:
   num_examples: 10
-  tokenizer: nvidia/NVIDIA-Nemotron-Nano-9B-v2
+  tokenizer: openai/gpt-oss-20b
 ----
 
 Re-triggering the identical evaluation is then a single command:
@@ -317,7 +317,7 @@ image::204b-config-run.png[The evalhub CLI confirming the repeatable evaluation 
 
 * *Job fails with `not a valid model identifier listed on huggingface.co`* —
 the tokenizer parameter is missing. Pass `--param
-tokenizer=nvidia/NVIDIA-Nemotron-Nano-9B-v2` (CLI) or add it under
+tokenizer=openai/gpt-oss-20b` (CLI) or add it under
 *Benchmark parameters* (dashboard).
 * *Run stays `Pending` forever while the benchmark jobs complete* — the
 project namespace is not registered as an evaluation tenant (the lab sets
