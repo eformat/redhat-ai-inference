@@ -382,7 +382,7 @@ routing — the standard OpenAI-compatible surface:
 curl -s "${MAAS_URL}/v1/chat/completions" \
   -H "Authorization: Bearer ${MAAS_API_KEY}" \
   -H "Content-Type: application/json" \
-  -d "{\"model\":\"${MODEL_ID}\",\"messages\":[{\"role\":\"user\",\"content\":\"What is Model-as-a-Service in one sentence?\"}],\"max_tokens\":150}" \
+  -d "{\"model\":\"${MODEL_ID}\",\"messages\":[{\"role\":\"user\",\"content\":\"What is Model-as-a-Service in one sentence?\"}],\"max_tokens\":1000}" \
   | jq .
 ----
 
