@@ -397,8 +397,8 @@ Deploy it:
 [source,role="execute"]
 ----
 oc create configmap maas-chat-client \
-  --from-file=maas_chat_client.py
-oc apply -f deploy/deployment.yaml
+  --from-file=maas-chat-client/maas_chat_client.py
+oc apply -f maas-chat-client/deploy/deployment.yaml
 ----
 
 Wait for the pod to become ready:
