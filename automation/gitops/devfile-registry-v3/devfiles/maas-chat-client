@@ -2,22 +2,21 @@ schemaVersion: 2.2.0
 metadata:
   name: maas-chat-client
   displayName: "Module 4: MaaS Chat Client"
-  description: "Python workspace pre-loaded with the maas-chat-client sample application for Module 4 of the Red Hat AI Inference workshop. Install the oc CLI with the setup command in Module 4 Exercise 1."
+  description: "Python workspace pre-loaded with the maas-chat-client sample application for Module 4 of the Red Hat AI Inference workshop."
 attributes:
   che-code.eclipse.org/vscode-preferences:
     security.workspace.trust.enabled: false
-  # TEMP: retain the failed pod so the postStart hook error is debuggable
-  controller.devfile.io/debug-start: "true"
-  controller.devfile.io/storage-type: per-workspace
 components:
   - name: maas-client-tools
     container:
-      # Verified anonymously-pullable (quay.io/rhpds/openshowroom-terminal-ocp
-      # went private). Lean and already cached on the workshop nodes.
-      image: registry.access.redhat.com/ubi9/python-311:latest
-      memoryLimit: 2Gi
-      memoryRequest: 512Mi
-      cpuRequest: 500m
+      # Red Hat's Universal Developer Image (the same image the built-in Dev
+      # Spaces samples use): oc, python3, curl, git, jq preinstalled, and
+      # built for the che-code entrypoint hook. Third-party images (e.g.
+      # ubi9/python-311) fail the hook with FailedPostStartHook.
+      image: registry.redhat.io/devspaces/udi-rhel9:latest
+      memoryLimit: 4Gi
+      memoryRequest: 1Gi
+      cpuRequest: 1000m
       mountSources: true
       sourceMapping: /projects
 projects:
