@@ -971,14 +971,19 @@
       failed_when: obs_flag.stdout | trim != 'true'
 
     - name: "M6 | User workload monitoring Prometheus pods are running"
+      # The UWM Prometheus stack deploys asynchronously once the observability
+      # chart's cluster-monitoring-config lands (enableUserWorkload: true) —
+      # on this nightly the namespace exists empty until then.
       kubernetes.core.k8s_info:
         api_version: v1
         kind: Pod
         namespace: "{{ uwm_namespace }}"
       register: uwm_pods
-      failed_when: >-
-        uwm_pods.resources | length == 0 or
-        uwm_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length == 0
+      until: >-
+        uwm_pods.resources | length > 0 and
+        uwm_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length > 0
+      retries: 20
+      delay: 15
 
     - name: "M6 | Model server pods are running as the metrics scrape target"
       kubernetes.core.k8s_info:

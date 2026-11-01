@@ -1,0 +1,21 @@
+---
+# Module 6 — enable user workload monitoring (UWM). The rhoai-catalog-nightly
+# fresh cluster creates the openshift-user-workload-monitoring namespace but
+# does NOT deploy the user-workload Prometheus stack — the namespace exists
+# empty, so "namespace exists" is NOT "enabled" on this build. The
+# cluster-monitoring-operator deploys the UWM Prometheus statefulset when
+# this config lands, which is what the module-06 pod checks and the Usage
+# dashboard metrics require.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-monitoring-config
+  namespace: openshift-monitoring
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "2"
+  labels:
+    platform.opendatahub.io/part-of: monitoring
+data:
+  config.yaml: |
+    enableUserWorkload: true
