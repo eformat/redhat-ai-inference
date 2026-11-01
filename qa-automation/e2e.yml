@@ -855,6 +855,14 @@
         state: present
       changed_when: true
 
+    - name: "M4 | Roll out the chat client with the fresh API key"
+      # envFrom secretRef resolves at pod creation: a Secret re-apply with a
+      # newly minted key does NOT reach a running pod, and the stale key is
+      # expired (1h expiry) — every run must roll the pod so it picks up the
+      # key this run minted (403 Unauthorized otherwise).
+      ansible.builtin.command: oc rollout restart deploy/{{ app_name }} -n {{ project_name }}
+      changed_when: true
+
     - name: "M4 | Polling for maas-chat-client Availability (retries expected, ~2 min)"
       kubernetes.core.k8s_info:
         api_version: apps/v1
