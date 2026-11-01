@@ -124,3 +124,25 @@ metadata:
     app: maas-api
 stringData:
   DB_CONNECTION_URL: "postgresql://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@postgres:5432/{{ .Values.postgres.db }}?sslmode=disable"
+---
+# The rhoai-catalog-nightly MaaS tenant config (MaasTenantConfig) reads the
+# controller DB secret from the aigateway infra namespace, NOT
+# redhat-ods-applications: "database Secret 'maas-db-config' not found in
+# namespace 'redhat-ai-gateway-infra'" — without it the tenant stays
+# PrerequisitesNotMet, the model-serving-api never gets its gateway route,
+# and https://maas.<domain>/maas-api/v1/api-keys 404s. The URL is
+# cross-namespace: the postgres service lives in redhat-ods-applications.
+# The redhat-ai-gateway-infra namespace is created by the DSC aigateway
+# module (wave 1), before this chart (wave 3) applies.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: maas-db-config
+  namespace: redhat-ai-gateway-infra
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    app: maas-api
+stringData:
+  DB_CONNECTION_URL: "postgresql://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@postgres.redhat-ods-applications.svc.cluster.local:5432/{{ .Values.postgres.db }}?sslmode=disable"
