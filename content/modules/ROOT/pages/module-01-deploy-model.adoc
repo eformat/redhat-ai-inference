@@ -76,26 +76,19 @@ oc get nodes -L nvidia.com/gpu.product
 ----
 
 ----
-NAME             STATUS   ROLES           AGE   VERSION   INTERNAL-IP    OS-IMAGE   KERNEL-VERSION          CONTAINER-RUNTIME
-control-plane-0  Ready    control-plane   26d   v1.33.4   10.0.0.10      RHCOS      5.14.0-570.14.1.el9_6   cri-o://1.33.4
-control-plane-1  Ready    control-plane   26d   v1.33.4   10.0.0.11      RHCOS      5.14.0-570.14.1.el9_6   cri-o://1.33.4
-control-plane-2  Ready    control-plane   26d   v1.33.4   10.0.0.12      RHCOS      5.14.0-570.14.1.el9_6   cri-o://1.33.4
-worker-0         Ready    worker          26d   v1.33.4   10.0.0.21      RHCOS      5.14.0-570.14.1.el9_6   cri-o://1.33.4
-worker-1         Ready    worker          26d   v1.33.4   10.0.0.22      RHCOS      5.14.0-570.14.1.el9_6   cri-o://1.33.4
-gpu-worker-0     Ready    worker          26d   v1.33.4   10.0.0.31      RHCOS      5.14.0-570.14.1.el9_6   cri-o://1.33.4
+NAME                                        STATUS   ROLES                         AGE   VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE                                                KERNEL-VERSION                 CONTAINER-RUNTIME
+ip-10-0-10-166.us-east-2.compute.internal   Ready    worker,worker-gpu             22h   v1.35.8   10.0.10.166   <none>        Red Hat Enterprise Linux CoreOS 9.8.20261006-0 (Plow)   5.14.0-687.55.1.el9_8.x86_64   cri-o://1.35.9-12.rhaos4.22.git4c168db.el9
+ip-10-0-23-196.us-east-2.compute.internal   Ready    control-plane,master,worker   23h   v1.35.8   10.0.23.196   <none>        Red Hat Enterprise Linux CoreOS 9.8.20261006-0 (Plow)   5.14.0-687.55.1.el9_8.x86_64   cri-o://1.35.9-12.rhaos4.22.git4c168db.el9
 
-NAME             STATUS   ROLES    AGE   VERSION   NVIDIA.COM/GPU.PRODUCT
-control-plane-0  Ready    control-plane   26d   v1.33.4
-control-plane-1  Ready    control-plane   26d   v1.33.4
-control-plane-2  Ready    control-plane   26d   v1.33.4
-worker-0         Ready    worker          26d   v1.33.4
-worker-1         Ready    worker          26d   v1.33.4
-gpu-worker-0     Ready    worker          26d   v1.33.4   NVIDIA-L4
+NAME                                        STATUS   ROLES                         AGE   VERSION   GPU.PRODUCT
+ip-10-0-10-166.us-east-2.compute.internal   Ready    worker,worker-gpu             22h   v1.35.8   NVIDIA-L4
+ip-10-0-23-196.us-east-2.compute.internal   Ready    control-plane,master,worker   23h   v1.35.8
 ----
 
-The `nvidia.com/gpu.product` label confirms `gpu-worker-0` is the NVIDIA
-L4 24 GB GPU node. Your model server in this module requests one GPU, so
-it schedules on this node.
+The `nvidia.com/gpu.product` label confirms
+`ip-10-0-10-166.us-east-2.compute.internal` (roles `worker,worker-gpu`) is
+the NVIDIA L4 24 GB GPU node. Your model server in this module requests one
+GPU, so it schedules on this node.
 
 === Project and namespace layout
 
