@@ -1,0 +1,39 @@
+# Node view access for the rhods-admins group. The RHOAI dashboard admin
+# experience (OdhDashboardConfig groupsConfig.adminGroups) grants no
+# cluster-scope RBAC, so Module 1's node checks (`oc get nodes -o wide`,
+# `oc get nodes -L nvidia.com/gpu.product`) fail with Forbidden for lab
+# users. This ClusterRole grants read-only node access and binds it to the
+# admin group — view only (get/list/watch), no cluster-admin. Wave -1: after
+# the rhods-admins Group (wave -2), before the RHOAI operator installs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: nodes-viewer
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rhods-admins-nodes-viewer
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "-1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: nodes-viewer
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: rhods-admins

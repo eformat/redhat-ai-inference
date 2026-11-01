@@ -117,6 +117,10 @@
     # the source of truth for what this playbook deploys.
     project_name: lab-user-dev
     tester_sa: model-tester
+    # The lab user (rhoai chart values lab.adminUser): member of the
+    # rhods-admins Group (00-rhods-admins-group.yaml) with node view RBAC
+    # (05-nodes-view-rbac.yaml). Module 1 runs `oc get nodes` as this user.
+    lab_user: lab-user1
     # -- MaaS (Module 3) -----------------------------------------------------
     maas_api_version: maas.opendatahub.io/v1alpha1
     maas_api_namespace: redhat-ods-applications
@@ -354,6 +358,10 @@
     # covered by Playwright in the Act phase). Here we apply the equivalent
     # LLMInferenceService exactly as printed in the module content, then poll
     # for Ready and verify the serving endpoint with the model-tester token.
+
+    - name: "M1 | VERIFY — lab user (rhods-admins) can view cluster nodes (nodes-viewer RBAC)"
+      ansible.builtin.command: oc get nodes -L nvidia.com/gpu.product --as={{ lab_user }}
+      changed_when: false
 
     - name: "M1 | Create the student project (idempotent)"
       ansible.builtin.command: oc new-project {{ project_name }}

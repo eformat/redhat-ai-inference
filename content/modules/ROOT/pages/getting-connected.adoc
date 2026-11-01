@@ -66,14 +66,6 @@ masthead) and select *Red Hat OpenShift AI*. You can also use the
 
 image::001-getting-connected-console.png[Red Hat OpenShift AI dashboard home after logging in,link=self,window=blank,width=700]
 
-The OpenShift console itself has two perspectives, switched from the
-perspective selector in the masthead:
-
-* *Administrator* — use this perspective during the workshop; it exposes the
-  cluster resources, workloads, and logs you inspect in later modules.
-* *Developer* — a simplified view for application developers; it hides many
-  of the resources used in this workshop.
-
 == Console tabs in Showroom
 
 The workshop interface embeds your environment in the right panel with three
@@ -113,8 +105,8 @@ oc whoami
 oc project
 ----
 . Verify that the OpenShift AI platform is installed and ready — the
-`DataScienceCluster` resource reports the platform status. Wait until it
-reports `Ready`:
+`DataScienceCluster` resource reports the platform status. It should
+report `Ready True`:
 +
 [source,bash,role="execute"]
 ----
