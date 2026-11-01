@@ -705,6 +705,10 @@
       changed_when: true
 
     - name: "M3-Ex4 | Polling for the second replica to be Kueue-gated (retries expected)"
+      # Kueue gates the pod via schedulingGates + the PodScheduled condition
+      # (reason=SchedulingGated). pod.status.reason is NOT set on this
+      # kubelet (v1.35.8), and conditions like Ready=True omit the reason
+      # field entirely — so the leaf access must be tolerant (map + default).
       kubernetes.core.k8s_info:
         api_version: v1
         kind: Pod
@@ -713,7 +717,11 @@
       until: >-
         scale_pods.resources
         | selectattr('metadata.name', 'match', '^' ~ model_name)
-        | selectattr('status.reason', 'equalto', 'SchedulingGated')
+        | map(attribute='status.conditions')
+        | flatten
+        | selectattr('type', 'equalto', 'PodScheduled')
+        | map(attribute='reason', default='')
+        | select('equalto', 'SchedulingGated')
         | list | length >= 1
       retries: 20
       delay: 10
@@ -747,7 +755,11 @@
         | selectattr('status.phase', 'equalto', 'Running') | list | length == 1 and
         back_pods.resources
         | selectattr('metadata.name', 'match', '^' ~ model_name)
-        | selectattr('status.reason', 'equalto', 'SchedulingGated')
+        | map(attribute='status.conditions')
+        | flatten
+        | selectattr('type', 'equalto', 'PodScheduled')
+        | map(attribute='reason', default='')
+        | select('equalto', 'SchedulingGated')
         | list | length == 0
       retries: 20
       delay: 10
