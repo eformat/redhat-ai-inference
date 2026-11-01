@@ -13,14 +13,13 @@ SYSTEM = "You are a concise assistant."
 
 def chat_completions(model, messages, max_tokens=1000):
     """POST one Chat Completions request and return the parsed response."""
-    # Nemotron Nano is a reasoning model: with thinking enabled the answer can
-    # stay in the reasoning field and content comes back null. This is one
-    # request parameter — not custom integration code.
+    # GPT-OSS handles reasoning natively via its harmony response format:
+    # thinking can stay in the reasoning field and content comes back null,
+    # so no request parameters or custom integration code are needed.
     payload = json.dumps({
         "model": model,
         "messages": messages,
         "max_tokens": max_tokens,
-        "chat_template_kwargs": {"enable_thinking": False},
     }).encode("utf-8")
     request = urllib.request.Request(
         f"{API_URL}/v1/chat/completions", data=payload, method="POST",

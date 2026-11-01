@@ -10,7 +10,10 @@
 # point at (the DSC kueue component's defaultClusterQueueName is also
 # `default`). The nominalQuota covers the workshop GPU node: 1 NVIDIA GPU
 # plus headroom for the serving pod's cpu/memory requests. Per-project
-# LocalQueues live in automation/gitops/workshop-apps (lab-scoped — the
+# LocalQueues are AUTO-CREATED by the RHOAI operator's queue management (DSC
+# kueue component autoCreateQueues: true, 31-dsc.yaml) in each kueue-managed
+# namespace — no per-project YAML needed (the former
+# workshop-apps/kueue-localqueue.yaml was deleted once this landed; the
 # student project is created from the dashboard after this chart syncs).
 #
 # Wave 2: after the DSC (wave 1) whose kueue component config the queue

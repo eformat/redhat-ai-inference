@@ -17,16 +17,23 @@
 #   applied (no-op when unchanged), the MaaSModelRef is only created when not
 #   already published, and the API key is minted with a unique name. The
 #   model token and MaaS API key are minted fresh per run with a 1h expiry —
-#   ephemeral, non-destructive.
+#   ephemeral, non-destructive. Namespace labels and the LLMInferenceService
+#   kueue.x-k8s.io/queue-name label are idempotent (--overwrite / apply).
 #
 # Scope:
+#   - Preflight (M0): chart-provided platform signals (rhods CSV, DSC, MaaS
+#     gateway, Kueue ClusterQueue, accelerator config, MaaS tier) — all
+#     GitOps-managed by the app-of-apps charts (automation/gitops/) and
+#     synced by ArgoCD; this playbook never applies platform resources
 #   - Module 1: Deploy the GPT-OSS 20B (essential variant) LLMInferenceService
-#     (KServe/vLLM, 1xGPU) and verify the serving endpoint
+#     (KServe/vLLM, 1xGPU, Kueue-managed) and verify the serving endpoint
 #   - Module 2: SKIPPED — EvalHub evaluation flows are dashboard/CLI console
 #     steps (environment-dependent evalhub CLI and pre-loaded benchmark
 #     datasets); validated via Playwright in the Act phase
-#   - Module 3: Verify MaaS publication (MaaSModelRef, subscription tiers),
-#     the MaaS gateway, and inference through the gateway with an API key
+#   - Module 3: Verify MaaS publication (MaaSModelRef, chart-provided
+#     maas-free-subscription tier), the MaaS gateway, inference through the
+#     gateway with an API key, and Kueue quota gating (scale to 2 → the
+#     second replica stays SchedulingGated → scale back)
 #   - Module 4: Deploy the maas-chat-client app (ConfigMap + Deployment) and
 #     exercise the request loop via oc exec
 #   - Module 5: Component verification (model server + gateway + app healthy)
@@ -41,13 +48,17 @@
 # Prerequisites:
 #   - Fresh cluster with RHOAI 3.6-ea2 + MaaS enabled + GPU node
 #     (healthcheck.yml passes first)
+#   - The app-of-apps charts (automation/gitops/) synced by ArgoCD — the M0
+#     preflight verifies the chart-provided signals before Module 1
 #   - oc logged in with credentials that can manage the student project
 #   - jq installed (used to parse MaaS API responses)
 #   - Model and serving images pre-pulled (RAC risk mitigation — keeps the
-#     Module 1 cold start inside the retry window)
+#     Module 1 cold start inside the retry window; on a cluster where they
+#     are NOT pre-pulled, the Module 1 polling retries are sized for it)
 #
 # Runtime:
-#   ~20-30 minutes first run (vLLM engine init dominates)
+#   ~20-30 minutes first run (vLLM engine init dominates; ~30-40 when the
+#   model and serving images are not pre-pulled — image pulls dominate)
 #   ~5 minutes on re-run (most steps are no-ops, only verify tasks run)
 #
 # How manifests are accessed:
@@ -86,6 +97,11 @@
     KUBECONFIG: "{{ k8s_kubeconfig | default(omit) }}"
     K8S_AUTH_KUBECONFIG: "{{ k8s_kubeconfig | default(omit) }}"
   vars:
+    # -- Platform (M0 preflight) ----------------------------------------------
+    # Chart-provided accelerator config the Module 1 deploy wizard selects
+    # (model-serving chart, 50-accelerator-config.yaml).
+    accel_config_name: vllm-nvidia-gpu-single-node
+    accel_config_namespace: redhat-ods-applications
     # -- Model (Module 1 — carries forward unchanged through Modules 2-6) ---
     model_name: redhataigpt-oss-20b-essential
     llis_api_version: serving.kserve.io/v1alpha2
@@ -105,11 +121,14 @@
     maas_api_version: maas.opendatahub.io/v1alpha1
     maas_api_namespace: redhat-ods-applications
     maas_subscription_namespace: models-as-a-service
-    # Subscription tiers pre-provisioned by environment automation (Module 3).
-    # The e2e mints its API key against the free tier: owner group
-    # system:authenticated covers every lab user, including the QA runner.
-    maas_subscriptions:
-      - "{{ model_name }}"
+    # The MaaS tier is provisioned by the maas-tier chart (ArgoCD
+    # rhai-maas-tier, wave 6): the e2e VERIFIES it and mints its API key
+    # against it — it never creates subscriptions. Learners have no RBAC in
+    # models-as-a-service, and the former manual apply went stale on the
+    # gpt-oss model switch. The tier's owner group is the group the OpenShift
+    # OAuth/OIDC identity presents to the gateway — plain
+    # system:authenticated never matches, so every call would 403.
+    maas_subscription_name: maas-free-subscription
     gateway_name: maas-default-gateway
     gateway_namespace: openshift-ingress
     # -- Application (Module 4) ----------------------------------------------
@@ -142,8 +161,8 @@
       def chat_completions(model, messages, max_tokens=1000):
           """POST one Chat Completions request and return the parsed response."""
           # GPT-OSS handles reasoning natively via its harmony response format:
-          # thinking can stay in the reasoning field and content comes back null.
-          # This is one request parameter — not custom integration code.
+          # thinking can stay in the reasoning field and content comes back null,
+          # so no request parameters or custom integration code are needed.
           payload = json.dumps({
               "model": model,
               "messages": messages,
@@ -236,6 +255,99 @@
   tasks:
 
     # ========================================================================
+    # PREFLIGHT (M0) — chart-provided platform signals
+    # ========================================================================
+    # The platform (RHOAI operators, DSC, MaaS gateway, Kueue queues,
+    # accelerator config, MaaS tier) is GitOps-managed by the app-of-apps
+    # charts (automation/gitops/) and synced by ArgoCD — this playbook never
+    # applies platform resources. The preflight polls the chart-provided
+    # signals so an unsynced chart fails fast here with a readable name
+    # instead of failing deep in Module 1 with an opaque error.
+
+    - name: "M0 | ENV | Polling for rhods CSV to succeed (retries expected, ~5 min)"
+      ansible.builtin.command: >-
+        oc wait csv -n redhat-ods-operator
+        -l operators.coreos.com/rhods-operator.redhat-ods-operator
+        --for=jsonpath='{.status.phase}'=Succeeded --timeout=60s
+      register: result
+      until: result.rc == 0
+      retries: 15
+      delay: 30
+      changed_when: false
+
+    - name: "M0 | ENV | Polling for DSC Ready (retries expected, ~10 min)"
+      kubernetes.core.k8s_info:
+        api_version: datasciencecluster.opendatahub.io/v1
+        kind: DataScienceCluster
+      register: dsc
+      until: >-
+        dsc.resources | length > 0 and (
+        dsc.resources[0].status.phase | default('') == 'Ready' or
+        dsc.resources[0].status.conditions | default([])
+        | selectattr('type', 'eq', 'Ready') | selectattr('status', 'eq', 'True')
+        | list | length > 0)
+      retries: 20
+      delay: 30
+
+    - name: "M0 | ENV | Polling for the MaaS gateway to be Programmed"
+      kubernetes.core.k8s_info:
+        api_version: gateway.networking.k8s.io/v1
+        kind: Gateway
+        name: "{{ gateway_name }}"
+        namespace: "{{ gateway_namespace }}"
+      register: gw
+      until: >-
+        gw.resources | length > 0 and
+        gw.resources[0].status.conditions | default([])
+        | selectattr('type', 'eq', 'Programmed') | selectattr('status', 'eq', 'True')
+        | list | length > 0
+      retries: 10
+      delay: 30
+
+    - name: "M0 | ENV | Polling for the Kueue ClusterQueue default (operator-configs chart)"
+      # The ClusterQueue carries the lab's GPU quota (nvidia.com/gpu: 1) —
+      # without it the Kueue-managed model deployment stays Inadmissible.
+      ansible.builtin.command: oc get clusterqueue default -o name
+      register: cq
+      until: cq.rc == 0
+      retries: 10
+      delay: 15
+      changed_when: false
+
+    - name: "M0 | ENV | Polling for the GPU accelerator config (model-serving chart)"
+      kubernetes.core.k8s_info:
+        api_version: "{{ llis_api_version }}"
+        kind: LLMInferenceServiceConfig
+        name: "{{ accel_config_name }}"
+        namespace: "{{ accel_config_namespace }}"
+      register: accel
+      until: accel.resources | length > 0
+      retries: 10
+      delay: 15
+
+    - name: "M0 | ENV | Polling for the MaaS tier subscription (maas-tier chart)"
+      kubernetes.core.k8s_info:
+        api_version: "{{ maas_api_version }}"
+        kind: MaaSSubscription
+        name: "{{ maas_subscription_name }}"
+        namespace: "{{ maas_subscription_namespace }}"
+      register: tier_sub
+      until: tier_sub.resources | length > 0
+      retries: 10
+      delay: 15
+
+    - name: "M0 | ENV | Polling for the MaaS tier auth policy (maas-tier chart)"
+      kubernetes.core.k8s_info:
+        api_version: "{{ maas_api_version }}"
+        kind: MaaSAuthPolicy
+        name: "{{ maas_subscription_name }}-policy"
+        namespace: "{{ maas_subscription_namespace }}"
+      register: tier_policy
+      until: tier_policy.resources | length > 0
+      retries: 10
+      delay: 15
+
+    # ========================================================================
     # MODULE 1 — Deploy the model for inference
     # ========================================================================
     # Students deploy through the model serving wizard in the dashboard (UI —
@@ -254,6 +366,27 @@
       register: ns_label
       failed_when: ns_label.rc != 0
       changed_when: ns_label.stdout is search('labeled|not labeled')
+
+    - name: "M1 | Label the project as Kueue-managed (idempotent)"
+      # The dashboard adds this label on project creation; `oc new-project`
+      # does not. It is what makes the RHOAI operator's queue management
+      # treat the project's workloads as Kueue-managed.
+      ansible.builtin.command: oc label namespace {{ project_name }} kueue.openshift.io/managed=true --overwrite
+      register: kueue_label
+      failed_when: kueue_label.rc != 0
+      changed_when: kueue_label.stdout is search('labeled|not labeled')
+
+    - name: "M1 | Polling for the auto-created LocalQueue default (retries expected, ~2 min)"
+      # The DSC kueue component (autoCreateQueues: true, bootstrap
+      # 31-dsc.yaml) makes the operator create a LocalQueue named `default`
+      # in each kueue-managed namespace. Without it the model server pod
+      # sits Inadmissible with "Queue default queue does not exist".
+      ansible.builtin.command: oc get localqueue default -n {{ project_name }} -o name
+      register: local_queue
+      until: local_queue.rc == 0
+      retries: 12
+      delay: 15
+      changed_when: false
 
     - name: "M1 | Create the model-tester service account (idempotent)"
       kubernetes.core.k8s:
@@ -279,6 +412,7 @@
               opendatahub.io/model-type: generative
               security.opendatahub.io/enable-auth: "true"
             labels:
+              kueue.x-k8s.io/queue-name: default
               opendatahub.io/dashboard: "true"
               opendatahub.io/genai-asset: "true"
           spec:
@@ -318,13 +452,17 @@
         state: present
       changed_when: true
 
-    - name: "M1 | Polling for LLMInferenceService Ready (retries expected, ~10 min)"
+    - name: "M1 | Polling for LLMInferenceService Ready (retries expected, ~10-15 min)"
+      # jsonpath wait form: `--for=condition=Ready` hangs on KServe-family
+      # CRs once metadata.generation moves past status.observedGeneration
+      # (the staleness check never clears even when Ready) — the jsonpath
+      # form evaluates the raw condition status and does not stale-check.
       ansible.builtin.command: >-
-        oc wait --for=condition=Ready llminferenceservice/{{ model_name }}
-        -n {{ project_name }} --timeout=60s
+        oc wait --for='jsonpath={.status.conditions[?(@.type=="Ready")].status}=True'
+        llminferenceservice/{{ model_name }} -n {{ project_name }} --timeout=60s
       register: result
       until: result.rc == 0
-      retries: 20
+      retries: 30
       delay: 30
 
     - name: "M1 | Get the model serving endpoint URL"
@@ -373,7 +511,9 @@
       register: m1_chat
       until: >-
         m1_chat.status | default(0) == 200 and
-        m1_chat.json.choices[0].message.content | default('') | length > 0
+        ((m1_chat.json.choices[0].message.content
+        or m1_chat.json.choices[0].message.reasoning
+        or '') | length > 0)
       retries: 5
       delay: 10
       changed_when: false
@@ -400,11 +540,14 @@
     # MODULE 3 — Expose the model as Model-as-a-Service
     # ========================================================================
     # Publishing the model to MaaS creates a MaaSModelRef in the model's
-    # project namespace; subscription tiers are pre-provisioned by
-    # environment automation in the models-as-a-service namespace (Module 3).
-    # Students verify these in the console (UI — Playwright covers the Gen AI
-    # studio views); here we verify the resources and drive inference through
-    # the MaaS gateway with an API key minted via the MaaS API.
+    # project namespace. The subscription tier (maas-free-subscription) is
+    # provisioned by the maas-tier chart (ArgoCD rhai-maas-tier, wave 6) —
+    # the e2e verifies it and never creates subscriptions (the former manual
+    # apply went stale on the gpt-oss model switch). Students verify these in
+    # the console (UI — Playwright covers the Gen AI studio views); here we
+    # verify the resources, confirm Kueue quota gating by scaling to two
+    # replicas (module-03 Ex 4), and drive inference through the MaaS
+    # gateway with an API key minted via the MaaS API.
 
     - name: "M3 | Check if MaaSModelRef exists for the model"
       kubernetes.core.k8s_info:
@@ -429,11 +572,14 @@
       changed_when: true
 
     - name: "M3 | Wait for the gateway re-attach to settle (route re-rolls)"
+      # jsonpath wait form — see the M1 polling task note: the patch bumps
+      # metadata.generation, which makes --for=condition=Ready hang on the
+      # observedGeneration staleness check even when Ready.
       command:
         argv:
           - oc
           - wait
-          - --for=condition=Ready
+          - '--for=jsonpath={.status.conditions[?(@.type=="Ready")].status}=True'
           - llminferenceservice/{{ model_name }}
           - -n
           - "{{ project_name }}"
@@ -456,6 +602,7 @@
             modelRef:
               kind: LLMInferenceService
               name: "{{ model_name }}"
+            tenantRef: models-as-a-service
         state: present
       when: >-
         mmr_check.resources
@@ -475,53 +622,38 @@
       retries: 20
       delay: 15
 
-    - name: "M3 | Create the MaaSSubscription pairing the model with governance (idempotent)"
-      kubernetes.core.k8s:
-        definition:
-          apiVersion: "{{ maas_api_version }}"
-          kind: MaaSSubscription
-          metadata:
-            name: "{{ model_name }}"
-            namespace: "{{ maas_subscription_namespace }}"
-          spec:
-            modelRefs:
-              - name: "{{ model_name }}"
-                namespace: "{{ project_name }}"
-                tokenRateLimits:
-                  - limit: 50000
-                    window: 1m
-            owner:
-              groups:
-                - name: system:authenticated
-            priority: 0
-      changed_when: true
-
-    - name: "M3 | Create the MaaSAuthPolicy for the model (required alongside the subscription)"
-      kubernetes.core.k8s:
-        definition:
-          apiVersion: "{{ maas_api_version }}"
-          kind: MaaSAuthPolicy
-          metadata:
-            name: "{{ model_name }}-policy"
-            namespace: "{{ maas_subscription_namespace }}"
-          spec:
-            modelRefs:
-              - name: "{{ model_name }}"
-                namespace: "{{ project_name }}"
-            subjects:
-              groups:
-                - name: system:authenticated
-      changed_when: true
-
-    - name: "M3 | VERIFY — subscription tiers exist for the model"
+    - name: "M3 | VERIFY — MaaS tier subscription is Active (provisioned by the maas-tier chart)"
+      # The subscription references the student's MaaSModelRef, which only
+      # becomes Ready above; the tier converges Failed → Active when the
+      # modelRef lands. Learners have no RBAC to create these — verifying is
+      # the whole job.
       kubernetes.core.k8s_info:
         api_version: "{{ maas_api_version }}"
         kind: MaaSSubscription
+        name: "{{ maas_subscription_name }}"
         namespace: "{{ maas_subscription_namespace }}"
-      register: subs
-      failed_when: >-
-        subs.resources | length == 0 or
-        subs.resources | selectattr('metadata.name', 'in', maas_subscriptions) | list | length == 0
+      register: tier_sub
+      until: >-
+        tier_sub.resources | length > 0 and
+        tier_sub.resources[0].status.phase | default('') == 'Active'
+      retries: 20
+      delay: 15
+
+    - name: "M3 | VERIFY — MaaS tier auth policy is Active (provisioned by the maas-tier chart)"
+      # A subscription without a matching policy returns HTTP 429; a policy
+      # without a matching subscription returns HTTP 403 — both must be
+      # Active before the gateway accepts API keys.
+      kubernetes.core.k8s_info:
+        api_version: "{{ maas_api_version }}"
+        kind: MaaSAuthPolicy
+        name: "{{ maas_subscription_name }}-policy"
+        namespace: "{{ maas_subscription_namespace }}"
+      register: tier_policy
+      until: >-
+        tier_policy.resources | length > 0 and
+        tier_policy.resources[0].status.phase | default('') == 'Active'
+      retries: 20
+      delay: 15
 
     - name: "M3 | VERIFY — MaaS gateway is Programmed"
       kubernetes.core.k8s_info:
@@ -545,12 +677,12 @@
       ansible.builtin.set_fact:
         maas_url: "https://maas.{{ cluster_domain.stdout | trim }}"
 
-    - name: "M3 | Mint a MaaS API key against the model subscription"
+    - name: "M3 | Mint a MaaS API key against the maas-free-subscription tier"
       ansible.builtin.shell: |
         curl -sSk -X POST "{{ maas_url }}/maas-api/v1/api-keys" \
           -H "Authorization: Bearer $(oc whoami -t)" \
           -H "Content-Type: application/json" \
-          -d '{"name":"e2e-key-'$RANDOM'","expiresIn":"1h","subscription":"{{ model_name }}"}' | jq -r .key
+          -d '{"name":"e2e-key-'$RANDOM'","expiresIn":"1h","subscription":"{{ maas_subscription_name }}"}' | jq -r .key
       register: maas_api_key
       until:
         maas_api_key.rc == 0 and
@@ -560,6 +692,65 @@
       delay: 15
       changed_when: false
       no_log: true
+
+    # -- Exercise 4: Scale and confirm Kueue quota gating (module-03 Ex 4) --
+    # The ClusterQueue's GPU quota is 1, so the second replica stays
+    # SchedulingGated while the first keeps serving — nothing is lost. On a
+    # multi-GPU cluster the second pod comes up Running the same way.
+
+    - name: "M3-Ex4 | Scale the model to two replicas"
+      ansible.builtin.command: >-
+        oc patch llminferenceservice {{ model_name }} -n {{ project_name }}
+        --type merge -p '{"spec":{"replicas":2}}'
+      changed_when: true
+
+    - name: "M3-Ex4 | Polling for the second replica to be Kueue-gated (retries expected)"
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ project_name }}"
+      register: scale_pods
+      until: >-
+        scale_pods.resources
+        | selectattr('metadata.name', 'match', '^' ~ model_name)
+        | selectattr('status.reason', 'equalto', 'SchedulingGated')
+        | list | length >= 1
+      retries: 20
+      delay: 10
+
+    - name: "M3-Ex4 | VERIFY — the first replica keeps serving while the second is gated"
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ project_name }}"
+      register: gated_pods
+      failed_when: >-
+        gated_pods.resources
+        | selectattr('metadata.name', 'match', '^' ~ model_name)
+        | selectattr('status.phase', 'equalto', 'Running') | list | length != 1
+
+    - name: "M3-Ex4 | Scale the model back to one replica"
+      ansible.builtin.command: >-
+        oc patch llminferenceservice {{ model_name }} -n {{ project_name }}
+        --type merge -p '{"spec":{"replicas":1}}'
+      changed_when: true
+
+    - name: "M3-Ex4 | Polling for the gated replica to be removed"
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ project_name }}"
+      register: back_pods
+      until: >-
+        back_pods.resources
+        | selectattr('metadata.name', 'match', '^' ~ model_name)
+        | selectattr('status.phase', 'equalto', 'Running') | list | length == 1 and
+        back_pods.resources
+        | selectattr('metadata.name', 'match', '^' ~ model_name)
+        | selectattr('status.reason', 'equalto', 'SchedulingGated')
+        | list | length == 0
+      retries: 20
+      delay: 10
 
     - name: "M3 | VERIFY — MaaS gateway route serves the model catalog"
       ansible.builtin.shell: |
@@ -745,10 +936,11 @@
     # Students explore the Cluster and Usage dashboards (UI — Playwright
     # captures those views). The automated equivalent verifies the metric
     # pipelines behind the dashboard are active: user workload monitoring is
-    # enabled, the observability dashboard flag is on, the UWM Prometheus
-    # pods (the metrics backend) are running, and the model server pods (the
-    # scrape target — vLLM engine metrics appear after a request, which the
-    # M4 request loop guarantees) are up.
+    # enabled (namespace + Prometheus pods), the observability dashboard flag
+    # is on, and the model server pods (the scrape target — vLLM engine
+    # metrics appear after a request, which the M4 request loop guarantees)
+    # are up. Note: the DSC v2 CRD has no monitoring component — UWM is
+    # cluster-level, not a DSC component.
 
     - name: "M6 | User workload monitoring namespace exists"
       kubernetes.core.k8s_info:
@@ -757,15 +949,6 @@
         name: "{{ uwm_namespace }}"
       register: uwm_ns
       failed_when: uwm_ns.resources | length == 0
-
-    - name: "M6 | DataScienceCluster monitoring component is Managed"
-      kubernetes.core.k8s_info:
-        api_version: datasciencecluster.opendatahub.io/v1
-        kind: DataScienceCluster
-      register: dsc
-      failed_when: >-
-        dsc.resources | length == 0 or
-        dsc.resources[0].spec.components.monitoring.managementState | default('Managed') != 'Managed'
 
     - name: "M6 | Observability dashboard flag is enabled"
       ansible.builtin.command: >-
@@ -804,7 +987,9 @@
     - name: "E2E complete"
       ansible.builtin.debug:
         msg: >-
-          Modules 1, 3-6 executed and verified successfully: model serving
-          endpoint, MaaS gateway inference, application request loop, and
-          observability pipelines are all healthy. Module 2 (EvalHub) is
-          validated via Playwright in the Act phase.
+          Preflight + Modules 1, 3-6 executed and verified successfully:
+          platform signals converged, model serving endpoint, MaaS gateway
+          inference (maas-free-subscription tier), Kueue quota gating,
+          application request loop, and observability pipelines are all
+          healthy. Module 2 (EvalHub) is validated via Playwright in the Act
+          phase.
