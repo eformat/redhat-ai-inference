@@ -274,6 +274,7 @@ metadata:
   namespace: {project_namespace}
   annotations:
     opendatahub.io/hardware-profile-name: gpu-serving
+    opendatahub.io/hardware-profile-namespace: redhat-ods-applications
   labels:
     kueue.x-k8s.io/queue-name: default # <2>
     opendatahub.io/dashboard: "true"

@@ -418,6 +418,8 @@
             annotations:
               openshift.io/display-name: GPT-OSS 20B (essential variant)
               opendatahub.io/model-type: generative
+              opendatahub.io/hardware-profile-name: gpu-serving
+              opendatahub.io/hardware-profile-namespace: redhat-ods-applications
               security.opendatahub.io/enable-auth: "true"
             labels:
               kueue.x-k8s.io/queue-name: default
