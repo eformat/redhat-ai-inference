@@ -17,6 +17,6 @@ asciidoc:
     # --- Lab identity (overridden per environment by the publishing house) ---
     project_namespace: 'lab-user-dev'
     # --- Workshop-specific endpoints (overridden per environment) ---
-    maas_gateway_url: https://maas.%DOMAIN%
-    evalhub_base_url: https://evalhub-redhat-ods-applications.apps.%DOMAIN%
-    inference_gateway_url: https://inference-gateway.apps.%DOMAIN%
+    maas_gateway_url: https://maas.'%DOMAIN%'
+    evalhub_base_url: https://evalhub-redhat-ods-applications.apps.'%DOMAIN%'
+    inference_gateway_url: https://inference-gateway.apps.'%DOMAIN%'
