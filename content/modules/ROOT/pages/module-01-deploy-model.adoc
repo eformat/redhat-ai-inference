@@ -273,7 +273,7 @@ metadata:
   name: redhataigpt-oss-20b-essential # <1>
   namespace: {project_namespace}
   annotations:
-    opendatahub.io/hardware-profile-name: gpu-serving
+    opendatahub.io/hardware-profile-name: gpu-serving # <9>
     opendatahub.io/hardware-profile-namespace: redhat-ods-applications
   labels:
     kueue.x-k8s.io/queue-name: default # <2>
@@ -333,6 +333,10 @@ calls in the OpenAI-compatible format without any additional parsers.
 <8> *Resource baseline* -- Requests and limits from the GPU serving hardware
 profile: 2 CPU, 16 Gi memory, and 1 GPU, sized for the GPT-OSS model on a
 single NVIDIA GPU node.
+<9> *Hardware profile annotations* -- Record which hardware profile the
+wizard selected, by name and namespace (`gpu-serving` in
+`redhat-ods-applications`). The profile supplies the resource baseline and,
+through its Kueue queue, the project's local queue.
 
 The `baseRefs` entry points at an `LLMInferenceServiceConfig` the wizard
 creates alongside the service — it carries the GPU node toleration from the

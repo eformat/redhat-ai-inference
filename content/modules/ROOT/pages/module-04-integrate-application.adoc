@@ -203,7 +203,19 @@ def run_request_loop(model):
 def main():
     if not API_URL or not API_KEY:
         sys.exit("Set MAAS_URL and MAAS_API_KEY before starting the client.")
-    model = MODEL or discover_model()
+    model = MODEL
+    # Log and wait instead of crashing: an expired or unauthorized key (403)
+    # or a temporarily empty catalog is transient — the deployment re-rolls
+    # with a fresh key, or the catalog repopulates, and the client recovers.
+    while not model:
+        try:
+            model = discover_model()
+        except urllib.error.HTTPError as exc:
+            print(f"HTTP {exc.code}: {exc.reason} — retrying model discovery in 60s")
+        except Exception as exc:
+            print(f"model discovery failed: {exc} — retrying in 60s")
+        if not model:
+            time.sleep(60)
     print(f"Using model: {model}")
     if INTERVAL > 0:
         run_request_loop(model)
