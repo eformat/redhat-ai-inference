@@ -81,9 +81,9 @@ EvalHub service.
 === Configure the CLI
 
 Point the CLI at the lab's EvalHub service. The tenant is your project
-namespace, and the token is your own OpenShift login token — the lab project
-is registered as an EvalHub tenant, so your user token is all the
-authorization you need:
+namespace, and the token is your own OpenShift login token — once the
+project is registered as an evaluation tenant (next section), your user
+token is all the authorization you need:
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
@@ -103,6 +103,34 @@ itself a pod, so the CLI auto-detects its ServiceAccount CA — the rhpds
 cluster's certificate — as the trust bundle, and the lab's Let's Encrypt
 certificate does not chain to it. Lab-only convenience: a production setup
 would point the client at the correct CA instead.
+
+=== Register the project as an evaluation tenant
+
+The EvalHub service only accepts evaluations from tenant namespaces.
+Registration is two labels on the project namespace, and the lab's RBAC
+grants the admin group label rights on this namespace only.
+`evalhub.trustyai.opendatahub.io/tenant` makes the EvalHub operator provision
+the job service account and RBAC in your project — including the service's
+read access to the model authentication secret created next.
+`opendatahub.io/generated-namespace` lets the evaluation pods' status
+callbacks through the default-deny network policy around the EvalHub
+service:
+
+[source,bash,role="execute",subs="specialcharacters,attributes"]
+----
+oc label namespace {project_namespace} evalhub.trustyai.opendatahub.io/tenant=true --overwrite
+oc label namespace {project_namespace} opendatahub.io/generated-namespace=true --overwrite
+----
+
+The `--overwrite` flag makes the commands idempotent — running them when the
+labels are already set is harmless. The operator watches for the tenant
+label and provisions the namespace's evaluation RBAC within seconds.
+Confirm both labels landed:
+
+[source,bash,role="execute",subs="specialcharacters,attributes"]
+----
+oc get namespace {project_namespace} --show-labels
+----
 
 === Create the model authentication secret
 
@@ -319,11 +347,12 @@ image::204b-config-run.png[The evalhub CLI confirming the repeatable evaluation 
 the tokenizer parameter is missing. Pass `--param
 tokenizer=openai/gpt-oss-20b` (CLI) or add it under
 *Benchmark parameters* (dashboard).
-* *Run stays `Pending` forever while the benchmark jobs complete* — the
-project namespace is not registered as an evaluation tenant (the lab sets
-the `evalhub.trustyai.opendatahub.io/tenant` and
-`opendatahub.io/generated-namespace` labels; an administrator can re-apply
-them with `oc label`).
+* *Run marked `Failed` immediately with `reading model auth secret ...
+forbidden`, or stays `Pending` forever while the benchmark jobs complete* —
+the project namespace is not registered as an evaluation tenant (the
+`evalhub.trustyai.opendatahub.io/tenant` and
+`opendatahub.io/generated-namespace` labels are missing). Re-run the
+labeling commands from Exercise 1 — they are idempotent.
 * *Run marked `Failed` with `pod unschedulable` shortly after submission* —
 the worker node was under disk pressure when the pods tried to start. The
 jobs may recover on their own; re-run the evaluation once the node is

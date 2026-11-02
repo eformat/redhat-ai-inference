@@ -3,3 +3,7 @@ lab:
   # Member of the rhods-admins group -> RHOAI dashboard admin (deploy wizard,
   # admin views). NOT cluster-admin — the chart itself is deployed by the admin.
   adminUser: lab-user1
+  # The student project namespace (Module 1/4 resources, EvalHub tenant).
+  # The project-namespace-labeller ClusterRole scopes the rhods-admins group's
+  # namespace label rights to this namespace ONLY (resourceNames).
+  projectNamespace: lab-user-dev

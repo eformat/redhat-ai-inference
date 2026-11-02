@@ -1,0 +1,44 @@
+# Namespace label rights for the rhods-admins group. The lab's `admin`
+# RoleBinding covers the project namespace's CONTENTS, but the Namespace
+# object itself is cluster-scoped — patch/update on `namespaces` is not in
+# the admin ClusterRole, so Module 2's label fix (`oc label namespace
+# lab-user-dev evalhub.trustyai.opendatahub.io/tenant=true`) fails with
+# Forbidden for the lab user. This ClusterRole grants label rights on the
+# lab project namespace ONLY (resourceNames scoping — the group cannot patch
+# any other namespace) and binds it to the admin group. Wave -1: after the
+# rhods-admins Group (wave -2), before the RHOAI operator installs.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: project-namespace-labeller
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    resourceNames:
+      - {{ .Values.lab.projectNamespace }}
+    verbs:
+      - get
+      - patch
+      - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rhods-admins-project-namespace-labeller
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "-1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: project-namespace-labeller
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: rhods-admins
