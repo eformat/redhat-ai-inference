@@ -62,8 +62,8 @@ oc get dsc
 ----
 
 ----
-NAME          AGE
-default-dsc   26d
+NAME          READY   REASON
+default-dsc   True 
 ----
 
 Next, confirm your GPU node is Ready and schedulable. List the cluster
@@ -88,7 +88,7 @@ ip-10-0-23-196.us-east-2.compute.internal   Ready    control-plane,master,worker
 The `nvidia.com/gpu.product` label confirms
 `ip-10-0-10-166.us-east-2.compute.internal` (roles `worker,worker-gpu`) is
 the NVIDIA L4 24 GB GPU node. Your model server in this module requests one
-GPU, so it schedules on this node.
+GPU, so it schedules on this node. Your node ip address and versions may differ.
 
 === Project and namespace layout
 
@@ -190,7 +190,7 @@ image::101-wizard-model-details.png[Model details step with the model location i
 (`RedHatAI/gpt-oss-20b-essential`). The wizard derives the deployment name
 from the model in the catalog and fits it to Kubernetes naming rules.
 .. In the *Description* field, enter a short description of the deployment.
-.. Select the *GPU serving (NVIDIA GPU)* hardware profile. The profile
+.. Select the *GPU serving (NVIDIA GPU)* hardware profile - it may be selected automatically. The profile
 provides the CPU, memory, and GPU resource baseline for the deployment.
 .. From the *Accelerator configuration* list, select *vLLM NVIDIA GPU Single
 Node*. The configuration carries the GPU node toleration so the model
@@ -232,7 +232,8 @@ image::101-wizard-review.png[Review step summarizing the deployment configuratio
 
 Verification: the deployed model appears with a *Ready* status on the
 *Gen AI studio → AI asset endpoints* page (if you selected *Add as AI asset
-endpoint*), and the model server pod shows *Running* in your project.
+endpoint*), and the model server pod shows *Running* in your project. It will take 
+several minutes for the model to be ready.
 
 Watch the model server pod come up:
 
