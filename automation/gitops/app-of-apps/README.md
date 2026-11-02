@@ -22,6 +22,17 @@ Child apps are wave-ordered by the root: the root's sync waits for each child
 to go Healthy before creating the next, preserving the former cross-chart
 deployment order. Within a child app its own resource sync-waves apply.
 
+## bootstrap-infra shim (ansible-created root apps)
+
+The lab provisioning Ansible creates the root `bootstrap` Application pointing
+at the former `automation/gitops/bootstrap-infra/` path. That path is now a
+shim chart (`../bootstrap-infra/`) that renders one Application
+(`rhai-app-of-apps`) pointing back at this directory — so an ansible-created
+root works unchanged on fresh clusters:
+`bootstrap` → `rhai-app-of-apps` → the seven child apps.
+Clusters whose root app points directly at this path must not apply the shim
+Application (two apps tracking the same child manifests would fight).
+
 ## Migration (one-time, ORDER MATTERS)
 
 The root application currently has `prune: true` and points at

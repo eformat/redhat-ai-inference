@@ -1,0 +1,2 @@
+# No knobs — this chart only delegates to the app-of-apps layout.
+# Child app definitions live in ../app-of-apps/ (single source of truth).

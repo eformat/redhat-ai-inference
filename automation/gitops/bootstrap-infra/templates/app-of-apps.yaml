@@ -1,0 +1,37 @@
+# Shim for the lab provisioning Ansible, which creates the root `bootstrap`
+# Application pointing at this path (the former single bootstrap-infra Helm
+# chart — now split into per-chart Helm charts wired as an app-of-apps, see
+# ../app-of-apps/README.md). This renders one Application pointing back at
+# the app-of-apps path, so the ansible-created root works unchanged:
+# bootstrap (this path) -> rhai-app-of-apps -> the seven rhai-* child apps.
+#
+# Clusters whose root app was manually re-pointed directly at
+# automation/gitops/app-of-apps must not apply this Application — two apps
+# tracking the same child manifests would fight over them.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rhai-app-of-apps
+  namespace: openshift-gitops
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/rhpds/redhat-ai-inference.git
+    targetRevision: main
+    path: automation/gitops/app-of-apps
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+    syncOptions:
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 20s
+        factor: 2
+        maxDuration: 5m
