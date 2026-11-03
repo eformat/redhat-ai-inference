@@ -1,0 +1,37 @@
+---
+# Namespace view access for the rhods-admins group (the lab user). Module 6's
+# "Where the metrics come from" section verifies that user workload monitoring
+# is enabled by reading the Namespace object itself:
+#
+#   oc get namespace openshift-user-workload-monitoring
+#
+# A Namespace object is cluster-scoped — a RoleBinding in a project grants
+# rights on its CONTENTS, not on the Namespace object — so this check fails
+# with Forbidden ("User lab-user1 cannot get resource namespaces in API group
+# \"\" in the namespace openshift-user-workload-monitoring"), breaking the
+# Module 6 verify flow. Kubernetes authorizes a GET of a SPECIFIC namespace
+# against the RoleBindings IN that namespace, so a RoleBinding binding the
+# built-in view ClusterRole (which grants namespaces get) is enough — no
+# ClusterRole needed, and the rights stay scoped to this one namespace.
+#
+# Scope note: view is read-only and deliberately excludes secrets. Bound to
+# the admin group the same way as the other grants (nodes-viewer, the
+# gateway-log-reader Role). Wave 2: the same wave as the UWM enablement
+# (50-uwm.yaml) this check validates.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rhods-admins-uwm-view
+  namespace: openshift-user-workload-monitoring
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: rhods-admins

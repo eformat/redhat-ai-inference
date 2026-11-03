@@ -247,15 +247,20 @@ Module 3, or set them again), then export the model ID:
 ----
 export MAAS_URL="{maas_url}"
 export MAAS_API_KEY="{maas_api_key}"
+----
+
+[source,bash,role="execute",subs="specialcharacters,attributes"]
+----
 export MODEL_ID=$(curl -s "${MAAS_URL}/v1/models" \
   -H "Authorization: Bearer ${MAAS_API_KEY}" \
   | jq -r '[.data[] | select(.ready==true)][0].id')
+echo "MODEL_ID: ${MODEL_ID}"
 ----
 
 Send a burst of 30 requests, spaced half a second apart, and record the HTTP
 status and response time of each request:
 
-[source,bash]
+[source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
 RESULTS=$(mktemp)
 PROMPT="In one sentence, why is observability critical for a production AI service?"

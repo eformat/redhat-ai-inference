@@ -72,11 +72,11 @@ Look for the `POST` to the MaaS gateway URL with a `200` status. The gateway URL
 
 image::502-app-logs.png[Application logs showing the outbound request to the MaaS gateway,link=self,window=blank,width=700]
 
-. Inspect the MaaS gateway access log. The gateway runs as `maas-default-gateway` pods with an `istio-proxy` container in the `openshift-ingress` namespace:
+. Inspect the MaaS gateway access log. The gateway runs as `data-science-gateway-class` pods with an `istio-proxy` container in the `openshift-ingress` namespace:
 
 [source,bash,role="execute"]
 ----
-oc logs -n openshift-ingress deployment/maas-default-gateway-istio -c istio-proxy --tail=20
+oc logs -n openshift-ingress deployment/maas-default-gateway-data-science-gateway-class --tail=20
 ----
 
 Expected output (abridged — one access-log line per request):
@@ -203,7 +203,7 @@ the `-k` below. Forward the port and scrape it:
 oc port-forward -n {project_namespace} ${MODEL_POD} 8480:8000 2>&1 > /dev/null &
 
 # Terminal 2 — scrape the endpoint (HTTPS — the pod serves its TLS cert)
-curl -sk https://localhost:8480/metrics | head -5
+curl -sk https://localhost:8480/metrics | grep vllm:num_requests_running
 ----
 
 Expected output (vLLM metric series):
@@ -286,8 +286,7 @@ oc logs deployment/maas-chat-client --tail=10
 Expected output (representative):
 
 ----
-[ERROR] model service returned 401 Unauthorized
-[ERROR] {"error": {"message": "Invalid or expired API key", "type": "authentication_error", "code": 401}}
+HTTP 403: Forbidden — check your endpoint URL and API key
 ----
 
 Check the model server — it is *silent*, because the gateway rejected the request before forwarding it:
