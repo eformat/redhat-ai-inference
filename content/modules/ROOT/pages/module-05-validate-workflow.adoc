@@ -200,7 +200,7 @@ the `-k` below. Forward the port and scrape it:
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
 # Terminal 1 — forward the model server metrics port
-oc port-forward -n {project-namespace} ${MODEL_POD} 8480:8000
+oc port-forward -n {project-namespace} ${MODEL_POD} 8480:8000 2>&1 > /dev/null &
 
 # Terminal 2 — scrape the endpoint (HTTPS — the pod serves its TLS cert)
 curl -sk https://localhost:8480/metrics | head -5
