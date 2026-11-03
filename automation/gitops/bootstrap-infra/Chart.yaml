@@ -1,4 +1,0 @@
-apiVersion: v2
-name: bootstrap-infra
-description: Shim entry point for the lab root ArgoCD application — delegates to the app-of-apps layout.
-version: 1.0.0

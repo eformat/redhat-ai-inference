@@ -1,0 +1,9 @@
+---
+resources:
+  - 00-operators-app.yaml
+  - 01-rhoai-app.yaml
+  - 02-operator-configs-app.yaml
+  - 03-maas-app.yaml
+  - 04-model-serving-app.yaml
+  - 05-observability-app.yaml
+  - 06-maas-tier-app.yaml
