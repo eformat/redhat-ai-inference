@@ -208,7 +208,7 @@ module 2: verify the flow live → rewrite concise → retrofit terminal renders
       KEY MECHANIC: a DEFINED attribute substitutes at BUILD time, so the
       role="execute" blocks stay runnable with the baked value (placeholder
       default in the repo build; the real value in the deployed showroom).
-      The earlier bug was an UNDEFINED attribute ({project-namespace} —
+      The earlier bug was an UNDEFINED attribute ({project_namespace} —
       renders literally). LESSON: parameterize + ALWAYS ensure the block has
       subs="specialcharacters,attributes" — four blocks lacked it and
       rendered {…} literally (module-03 oc apply heredoc, module-02 evalhub
@@ -227,12 +227,12 @@ module 2: verify the flow live → rewrite concise → retrofit terminal renders
       cluster.example.com URLs), secrets clean.
 
 - [x] ALL ANTORA PLACEHOLDER COMMANDS FIXED: the page used
-      `{project-namespace}` 6x and `{maas_url}`/`{maas_api_key}` — NONE are
+      `{project_namespace}` 6x and `{maas_url}`/`{maas_api_key}` — NONE are
       defined in content/antora.yml (only guid/user/password/openshift_*_url
       are), so they rendered LITERALLY and the role="execute" blocks were not
       runnable (modules 1-2 use lab-user-dev directly, 0 placeholders — the
       house style is real lab values inline). FIX: all 6
-      `{project-namespace}` -> `lab-user-dev`; `export MAAS_URL` -> the real
+      `{project_namespace}` -> `lab-user-dev`; `export MAAS_URL` -> the real
       gateway URL https://maas.apps.ocp.ddrcj.sandbox4732.opentlc.com;
       `export MAAS_API_KEY` -> `<your sk-oai- API key>` (angle brackets, the
       per-learner key). VERIFIED in the built site

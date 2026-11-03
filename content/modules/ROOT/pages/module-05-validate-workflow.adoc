@@ -93,8 +93,8 @@ image::503-gateway-logs.png[Gateway istio-proxy access log with the 200 entry,li
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-MODEL_POD=$(oc get pods -n {project-namespace} -o name | grep '^pod/redhataigpt-oss-20b-essential-kserve' | head -1)
-oc logs -n {project-namespace} ${MODEL_POD} --tail=20
+MODEL_POD=$(oc get pods -n {project_namespace} -o name | grep '^pod/redhataigpt-oss-20b-essential-kserve' | head -1)
+oc logs -n {project_namespace} ${MODEL_POD} --tail=20
 ----
 
 Expected output (representative — exact wording varies by vLLM version):
@@ -162,7 +162,7 @@ curl -s "${MAAS_URL}/v1/models" -H "Authorization: Bearer ${MAAS_API_KEY}" | jq 
 Expected output:
 
 ----
-publishers/{project-namespace}/models/redhataigpt-oss-20b-essential   true
+publishers/{project_namespace}/models/redhataigpt-oss-20b-essential   true
 ----
 
 . *Gateway routing.* The gateway pods must be `Running`:
@@ -183,7 +183,7 @@ maas-default-gateway-istio-6f9b7d8c4-xq2lp    1/1     Running   0          2d
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-oc get llminferenceservice redhataigpt-oss-20b-essential -n {project-namespace}
+oc get llminferenceservice redhataigpt-oss-20b-essential -n {project_namespace}
 ----
 
 Expected output:
@@ -200,7 +200,7 @@ the `-k` below. Forward the port and scrape it:
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
 # Terminal 1 — forward the model server metrics port
-oc port-forward -n {project-namespace} ${MODEL_POD} 8480:8000 2>&1 > /dev/null &
+oc port-forward -n {project_namespace} ${MODEL_POD} 8480:8000 2>&1 > /dev/null &
 
 # Terminal 2 — scrape the endpoint (HTTPS — the pod serves its TLS cert)
 curl -sk https://localhost:8480/metrics | head -5
@@ -235,7 +235,7 @@ The MaaS gateway also exposes Envoy telemetry metrics — the surface Module 6 c
 
 |Model server
 |`Added request` / `Finished request` lines and `POST ... 200 OK`
-|`oc logs -n \{project-namespace} ${MODEL_POD}`
+|`oc logs -n \{project_namespace} ${MODEL_POD}`
 
 |Model
 |Completion returned with `finish_reason: stop` and token usage counts
@@ -294,7 +294,7 @@ Check the model server — it is *silent*, because the gateway rejected the requ
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
-oc logs -n {project-namespace} ${MODEL_POD} --tail=10
+oc logs -n {project_namespace} ${MODEL_POD} --tail=10
 ----
 
 No new `Added request` line appears: the model never saw the request.

@@ -319,7 +319,7 @@ Endpoint*.
 [source,json,subs="specialcharacters,attributes"]
 ----
 {
-  "id": "publishers/{project-namespace}/models/redhataigpt-oss-20b-essential",
+  "id": "publishers/{project_namespace}/models/redhataigpt-oss-20b-essential",
   "name": "GPT-OSS 20B (essential)",
   "url": "{maas_url}/v1",
   "toolCalling": true,
