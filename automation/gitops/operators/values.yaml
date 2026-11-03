@@ -4,16 +4,16 @@ catalog:
   # true = deploy the digest-pinned FBC CatalogSource and the
   # quay.io registry mirror ICSP. false = neither is deployed (use when the
   # cluster gets them from elsewhere, e.g. GA redhat-operators only).
-  enabled: true
+  # enabled: true
   # CatalogSource the rhods-operator Subscription resolves from — independent
   # of `enabled`. Default matches the CatalogSource this chart deploys; set
   # redhat-operators to resolve RHOAI from the GA marketplace instead.
   # nightly for rhoai-3.6-ea2 (needs pull secret deployed separately)
-  channel: beta
-  source: rhoai-catalog-nightly
-  name: rhoai-catalog-nightly
-  image: quay.io/rhoai/rhoai-fbc-fragment:rhoai-3.6@sha256:92293049092e9ace445dd94713498eeec5c6513584c43892d6aba7c4d817a8a3 # 3.6-ea2
+  #channel: beta
+  #source: rhoai-catalog-nightly
+  #name: rhoai-catalog-nightly
+  #image: quay.io/rhoai/rhoai-fbc-fragment:rhoai-3.6@sha256:92293049092e9ace445dd94713498eeec5c6513584c43892d6aba7c4d817a8a3 # 3.6-ea2
   # defaults for rhoai-3.6-ea2
-  # enabled: false
-  # channel: beta
-  # source: redhat-operators
+  enabled: false
+  channel: beta
+  source: redhat-operators
