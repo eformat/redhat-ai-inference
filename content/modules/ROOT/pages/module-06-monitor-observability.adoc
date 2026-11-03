@@ -265,17 +265,24 @@ status and response time of each request:
 RESULTS=$(mktemp)
 PROMPT="In one sentence, why is observability critical for a production AI service?"
 
+PIDS=""
+
 for i in $(seq 1 30); do
   (
-    curl -s -o /dev/null -w "%{http_code} %{time_total}\n" \
+    # --max-time bounds each request: a stalled gateway connection must not
+    # hang the whole burst
+    curl -s --connect-timeout 5 --max-time 30 -o /dev/null -w "%{http_code} %{time_total}\n" \
       "${MAAS_URL}/v1/chat/completions" \
       -H "Authorization: Bearer ${MAAS_API_KEY}" \
       -H "Content-Type: application/json" \
       -d "{\"model\":\"${MODEL_ID}\",\"messages\":[{\"role\":\"user\",\"content\":\"${PROMPT}\"}],\"max_tokens\":80}"
   ) >> "${RESULTS}" &
+  PIDS="${PIDS} $!"
   sleep 0.5
 done
-wait
+# wait only on this burst's PIDs — a bare `wait` also waits for unrelated
+# background jobs (port-forwards, earlier runs) still alive in this terminal
+wait ${PIDS}
 
 echo "Total requests    : $(wc -l < "${RESULTS}")"
 echo "HTTP 200 (ok)     : $(grep -c '^200 ' "${RESULTS}")"
