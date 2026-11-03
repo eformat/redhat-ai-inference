@@ -1,5 +1,6 @@
 # RHOAI 3.6-ea2 nightly catalog (digest-pinned). Must exist before the
 # rhods-operator Subscription (wave 0) resolves its bundle.
+{{- if .Values.catalog.enabled }}
 apiVersion: operators.coreos.com/v1alpha1
 kind: CatalogSource
 metadata:
@@ -18,3 +19,4 @@ spec:
   updateStrategy:
     registryPoll:
       interval: 15m
+{{- end }}

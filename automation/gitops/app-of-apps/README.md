@@ -17,7 +17,10 @@ as an app-of-apps. The root application (named `bootstrap`) points at
 
 Each child chart is a self-contained Helm chart (`Chart.yaml` + `values.yaml` +
 `templates/`). Knobs live in each chart's `values.yaml` (operators: the catalog
-fragment; rhoai: the lab admin user; maas: the dummy postgres credentials).
+fragment — `catalog.enabled: false` skips the ICSP + nightly CatalogSource and
+`catalog.source` selects the CatalogSource the rhods-operator Subscription
+resolves from, independently; rhoai: the lab admin user; maas: the dummy
+postgres credentials).
 Child apps are wave-ordered by the root: the root's sync waits for each child
 to go Healthy before creating the next, preserving the former cross-chart
 deployment order. Within a child app its own resource sync-waves apply.

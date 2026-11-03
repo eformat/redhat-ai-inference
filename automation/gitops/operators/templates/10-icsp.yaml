@@ -2,6 +2,7 @@
 # references registry.redhat.io/rhoai/... bundle/operand images that only
 # exist on quay.io/rhoai. Applying this rolls every node (MachineConfig
 # update + reboot) — expected on first sync.
+{{- if .Values.catalog.enabled }}
 apiVersion: operator.openshift.io/v1alpha1
 kind: ImageContentSourcePolicy
 metadata:
@@ -14,3 +15,4 @@ spec:
     - source: registry.redhat.io/rhoai
       mirrors:
         - quay.io/rhoai
+{{- end }}
