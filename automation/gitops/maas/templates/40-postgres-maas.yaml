@@ -16,6 +16,10 @@ stringData:
   POSTGRES_USER: {{ .Values.postgres.user | quote }}
   POSTGRES_PASSWORD: {{ .Values.postgres.password | quote }}
   POSTGRES_DB: {{ .Values.postgres.db | quote }}
+  # The postgres superuser password — the evalhub-db-init Job connects as the
+  # postgres superuser to create the evalhub database (POSTGRESQL_USER lacks
+  # CREATEDB in the RHEL postgres image).
+  POSTGRESQL_ADMIN_PASSWORD: {{ .Values.postgres.password | quote }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -56,6 +60,11 @@ spec:
             secretKeyRef:
               name: postgres-creds
               key: POSTGRES_DB
+        - name: POSTGRESQL_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-creds
+              key: POSTGRESQL_ADMIN_PASSWORD
         ports:
         - containerPort: 5432
         volumeMounts:
