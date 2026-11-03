@@ -1,0 +1,38 @@
+---
+# Cluster monitoring view for the rhods-admins group (the lab user). The
+# Observability Dashboard tabs (Dashboard + Infrastructure, with the MaaS
+# usage analytics and the Token Consumption by User table) query metrics
+# across namespaces — Limitador counters in kuadrant-system, the gateway in
+# openshift-ingress, and model metrics everywhere — through the Perses
+# tenancy datasource, which scopes every query to the namespaces the user
+# can read. Without cross-namespace metrics access the dashboard backend
+# surfaces ONLY the project-scoped Models tab and hides the admin
+# dashboards ("cannot see MaaS observability dashboards").
+#
+# The built-in cluster-monitoring-view ClusterRole is that gate. It grants:
+#   - prometheuses/api on the k8s Prometheus (monitoring API access — the
+#     tenancy layer authorizes cross-namespace metric queries for holders)
+#   - namespaces get
+#
+# Bound to the admin group the same way as the nodes-viewer grant (rhoai
+# tier) and the uwm-view RoleBinding (51-uwm-view-rbac.yaml). The
+# namespaces-get rule also covers the Module 6 platform check
+# `oc get namespace openshift-user-workload-monitoring` cluster-wide; 51
+# keeps that one scoped to the single namespace. Wave 2: the same wave as
+# the UWM enablement (50-uwm.yaml) the tabs query.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rhods-admins-cluster-monitoring-view
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-monitoring-view
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: rhods-admins
