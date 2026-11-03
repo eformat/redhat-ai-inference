@@ -355,6 +355,10 @@ the variables remain available):
 ----
 export MAAS_URL="{maas_gateway_url}"
 export MAAS_API_KEY="<your sk-oai- API key>"
+----
+
+[source,bash,role="execute",subs="specialcharacters,attributes"]
+----
 curl -s "${MAAS_URL}/v1/models" -H "Authorization: Bearer ${MAAS_API_KEY}" | jq .
 ----
 

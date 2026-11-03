@@ -59,6 +59,8 @@ IDE opens in your browser. If the editor opens in Restricted Mode, click
 
 image::401-dev-spaces-create-workspace.png[Dev Spaces Create Workspace page showing the Module 4: MaaS Chat Client sample,link=self,window=blank,width=700]
 
+image::401-dev-spaces-create-workspace1.png[Dev Spaces Create Workspace Module 4: Workspace Starting,link=self,window=blank,width=700]
+
 image::402-workspace-ide-open.png[Workspace IDE open with the lab repository pre-cloned,link=self,window=blank,width=700]
 
 [NOTE]
