@@ -323,7 +323,7 @@ Endpoint*.
   "name": "GPT-OSS 20B (essential)",
   "url": "{maas_url}/v1",
   "toolCalling": true,
-  "vision": false,
+  "vision": true,
   "maxInputTokens": 131072,
   "maxOutputTokens": 16384
 }
@@ -440,24 +440,6 @@ maas-chat-client-7d9f8b6c5-kq9xz   1/1     Running   0          25s
 ----
 
 Pod names vary; press `Ctrl+C` once the pod reports `Running 1/1`.
-
-[TIP]
-====
-If the pod shows `Error` with restarts climbing and its log says `Set
-MAAS_URL and MAAS_API_KEY before starting the client`, the Secret was created
-from empty exported variables — the exports were not set in the terminal that
-ran `oc create secret`. Re-run the export block, re-create the Secret, and
-restart the rollout — the next pod picks up the corrected values:
-
-[source,role="execute"]
-----
-oc delete secret maas-credentials
-oc create secret generic maas-credentials \
-  --from-literal=MAAS_URL="${MAAS_URL}" \
-  --from-literal=MAAS_API_KEY="${MAAS_API_KEY}"
-oc rollout restart deployment/maas-chat-client
-----
-====
 
 [NOTE]
 ====

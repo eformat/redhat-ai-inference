@@ -47,8 +47,6 @@ The model behind the gateway is `redhataigpt-oss-20b-essential`, serving in your
 
 image::501-serving-chain.png[Annotated serving-chain diagram from application through MaaS gateway and model server to model,link=self,window=blank,width=700]
 
-// NOTE: screenshot placeholder — capture the annotated serving-chain diagram during the Act phase.
-
 Send one request and follow it through every layer:
 
 . Open the application interface and send a request that triggers an inference call. Note the response — this is your *baseline*. Copy it now: Exercise 4 compares against it to prove the chain is still healthy after the failure simulations.
@@ -74,8 +72,6 @@ Look for the `POST` to the MaaS gateway URL with a `200` status. The gateway URL
 
 image::502-app-logs.png[Application logs showing the outbound request to the MaaS gateway,link=self,window=blank,width=700]
 
-// NOTE: screenshot placeholder — capture the application logs showing the outbound request during the Act phase.
-
 . Inspect the MaaS gateway access log. The gateway runs as `maas-default-gateway` pods with an `istio-proxy` container in the `openshift-ingress` namespace:
 
 [source,bash,role="execute"]
@@ -92,8 +88,6 @@ Expected output (abridged — one access-log line per request):
 The `200` with `via_upstream` confirms the gateway authenticated the request, applied the subscription policy, and forwarded it to the model server.
 
 image::503-gateway-logs.png[Gateway istio-proxy access log with the 200 entry,link=self,window=blank,width=700]
-
-// NOTE: screenshot placeholder — capture the gateway istio-proxy access log with the 200 entry during the Act phase.
 
 . Inspect the model server logs to confirm the inference request was received and processed:
 
@@ -115,8 +109,6 @@ The `Added request` and `Finished request` lines confirm the model server receiv
 
 image::504-model-server-logs.png[Model server logs showing the request received and processed,link=self,window=blank,width=700]
 
-// NOTE: screenshot placeholder — capture the vLLM predictor logs showing the processed request during the Act phase.
-
 [NOTE]
 ====
 Set the values recorded in Module 3 as environment variables — later steps use them. Run these in the same terminal session so they remain available:
@@ -125,7 +117,6 @@ Set the values recorded in Module 3 as environment variables — later steps use
 ----
 export MAAS_URL="{maas_url}"
 export MAAS_API_KEY="{maas_api_key}"
-export MODEL_ID=$(curl -s "${MAAS_URL}/v1/models" -H "Authorization: Bearer ${MAAS_API_KEY}" | jq -r '[.data[] | select(.ready==true)][0].id')
 ----
 ====
 
@@ -254,9 +245,9 @@ The MaaS gateway also exposes Envoy telemetry metrics — the surface Module 6 c
 .5 minutes
 
 Now that you know what healthy looks like at every layer, you will
-introduce — and fix — simulated failures.
+introduce — and fix — a simulated failure.
 
-Both scenarios follow the same discipline: *introduce* a reversible failure, *observe* the error behavior in the logs, *diagnose* which layer broke, then *fix* and *revert*. The key diagnostic: a failure at one layer leaves the layers below it silent — if the model server logs show no request, the break is upstream at the gateway or the application.
+Troubleshooting follows the same discipline: *introduce* a reversible failure, *observe* the error behavior in the logs, *diagnose* which layer broke, then *fix* and *revert*. The key diagnostic: a failure at one layer leaves the layers below it silent — if the model server logs show no request, the break is upstream at the gateway or the application.
 
 [cols="1,2,2"]
 |===
@@ -264,11 +255,7 @@ Both scenarios follow the same discipline: *introduce* a reversible failure, *ob
 
 |HTTP 401 / 403 on every request
 |Access control — API key or subscription
-|Scenario A
-
-|HTTP 500 with an empty body on large requests
-|MaaS gateway — request body limit
-|Scenario B
+|Scenario
 
 |HTTP 404 or connection refused
 |Wrong endpoint URL — check `MAAS_URL` against the value recorded in Module 3
@@ -279,14 +266,12 @@ Both scenarios follow the same discipline: *introduce* a reversible failure, *ob
 |—
 |===
 
-=== Scenario A — Invalid or expired API credential
+=== Scenario — Invalid or expired API credential
 
 .Introduce
 Revoke the API key your application uses: in the OpenShift AI dashboard, navigate to *Gen AI studio → API keys*, and in the row for your key click the action menu (⋮) and select *Revoke*. Confirm by entering the key name. The key stops working — the application secret still holds the now-revoked key.
 
 image::505-invalid-credential-401.png[API key revoke dialog on the API keys page,link=self,window=blank,width=700]
-
-// NOTE: screenshot placeholder — capture the API key revoke dialog during the Act phase.
 
 .Observe
 Send a request from the application interface — it fails. Inspect the logs at each layer:
@@ -339,123 +324,20 @@ oc patch secret maas-credentials --type merge \
 oc rollout restart deployment/maas-chat-client
 ----
 
-Wait for the rollout to complete, then send a request from the application interface again. It succeeds with `200` — the environment is restored. Re-export the new key for the rest of this module:
-
-[source,bash,role="execute",subs="specialcharacters,attributes"]
-----
-export MAAS_API_KEY="{maas_api_key}"
-----
+Wait for the rollout to complete, then send a request from the application interface again. It succeeds with `200` — the environment is restored.
 
 [NOTE]
 ====
 Revert verified: the revoked key is gone, the new key is active, and the application pod is `Running` on the updated secret. Nothing else in the environment changed — Module 6 is unaffected.
 ====
 
-=== Scenario B — Oversized request body
-
-.Introduce
-Send a request larger than 4 MiB through the gateway. The Python snippet pads a prompt until the JSON body passes the 4,194,304-byte limit, then POSTs it:
-
-[source,python]
-----
-import json
-import os
-
-import requests
-
-url = os.environ["MAAS_URL"].rstrip("/") + "/v1/chat/completions"
-headers = {
-    "Authorization": "Bearer " + os.environ["MAAS_API_KEY"],
-    "Content-Type": "application/json",
-}
-
-# Pad the prompt until the request body is well past the 4 MiB gateway limit
-padding = "x" * 4_300_000
-payload = {
-    "model": os.environ["MODEL_ID"],
-    "messages": [{"role": "user", "content": "Summarize this text: " + padding}],
-    "max_tokens": 32,
-}
-body = json.dumps(payload).encode()
-
-print(f"Request body size: {len(body):,} bytes (gateway limit: 4,194,304)")
-
-response = requests.post(url, headers=headers, data=body, timeout=120)
-print(f"HTTP {response.status_code} - response body: {len(response.content)} bytes")
-----
-
-Save the snippet as `oversized-request.py` and run it:
-
-[source,bash,role="execute"]
-----
-python3 oversized-request.py
-----
-
-.Observe
-Expected output:
-
-----
-Request body size: 4,300,144 bytes (gateway limit: 4,194,304)
-HTTP 500 - response body: 0 bytes
-----
-
-The response is an opaque HTTP 500 with a *completely empty body* — not a `413 Payload Too Large`, and not the JSON error envelope you saw in Scenario A. The application cannot tell what went wrong from the response alone.
-
-.Diagnose
-Read the gateway access log for the failing request:
-
-[source,bash,role="execute"]
-----
-oc logs -n openshift-ingress deployment/maas-default-gateway-istio -c istio-proxy --tail=50 | grep -i ext_proc_error
-----
-
-Expected output (abridged — `<size>` is your actual body size):
-
-----
-... ext_proc_error gRPC error 8{grpc: received_message_larger_than_max (4300144 vs. 4194304)}
-----
-
-image::506-gateway-ext-proc-error.png[Gateway access log showing the ext_proc_error entry for the oversized request,link=self,window=blank,width=700]
-
-// NOTE: screenshot placeholder — capture the gateway access log showing the ext_proc_error entry during the Act phase.
-
-The gateway's external processing (ext_proc) layer receives request bodies over gRPC with a 4,194,304-byte (4 MiB) message limit. Error 8 is gRPC `RESOURCE_EXHAUSTED`: `received message larger than max`. The body never reaches the model server — the vLLM logs stay silent and the gateway emits the empty `500`.
-
-The threshold is a cliff, not a slope: requests up to roughly 3.9 MB pass normally, while requests of roughly 4.27 MB and above fail. This is not an Envoy or Kuadrant configuration problem on your side — it is a known issue, https://issues.redhat.com/browse/RHOAIENG-99765[RHOAIENG-99765], tracked against the MaaS gateway.
-
-.Fix and revert
-There is nothing to undo in the environment — the gateway rejected the request without changing state. The fix is client-side: keep request payloads under roughly 3.8 MB through the MaaS gateway. The usual sources of oversized bodies:
-
-* Base64-encoded attachments or images inlined in the prompt JSON — strip them, or move the content to object storage and reference it by URL
-* Batched requests that concatenate many documents into one call — split them into smaller requests
-* Retrieved documents pasted wholesale into the prompt — truncate or summarize before sending
-
-Confirm the chain is healthy again with a normal-sized request:
-
-[source,bash,role="execute"]
-----
-curl -s "${MAAS_URL}/v1/chat/completions" \
-  -H "Authorization: Bearer ${MAAS_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d "{\"model\":\"${MODEL_ID}\",\"messages\":[{\"role\":\"user\",\"content\":\"What is Model-as-a-Service in one sentence?\"}],\"max_tokens\":100}" \
-  | jq -r '.choices[0].finish_reason'
-----
-
-Expected output:
-
-----
-stop
-----
-
 == Exercise 4: Confirm end-to-end reliability
 
 .5 minutes
 
-After restoring from both failures, prove the serving chain is back to its baseline.
+After restoring from the failure, prove the serving chain is back to its baseline.
 
 . *Re-run the happy path through the application.* Send a request from the application interface and compare the response to the baseline captured in Exercise 1: same structure, `finish_reason: stop`, and a completion consistent with the original — the chain recovers end-to-end after the failure cycle.
-
-. *Re-run the direct API check.* The same curl from Scenario B still returns `stop` with HTTP 200 — a completion in the same OpenAI-compatible format as the baseline, including `usage` token counts.
 
 . *Verify metrics are still flowing.* Scrape the model server metrics endpoint again and confirm the counters advanced past the values seen in Exercise 2 — through the failed attempts and the recovery, the serving chain kept emitting telemetry:
 
@@ -475,7 +357,7 @@ Metrics still flowing is the handoff to Module 6, where you watch these same ser
 
 * Application pod `Running`, sending requests, logging outcomes
 * Subscription and authorization policy present; API key valid with `sk-oai-` prefix
-* Gateway pods `Running`, routing requests, enforcing the 4 MiB body limit
+* Gateway pods `Running`, routing requests
 * Model server `READY`, receiving requests, serving completions
 * Metrics flowing from the model server for Module 6
 
@@ -484,7 +366,7 @@ Metrics still flowing is the handoff to Module 6, where you watch these same ser
 **What you accomplished:**
 
 * Traced a request through the serving chain and verified each component.
-* Troubleshot simulated failures — an invalid API credential and an oversized request body.
+* Troubleshot a simulated failure — an invalid API credential.
 * Confirmed end-to-end reliability against the baseline.
 
 **Key takeaways:**
