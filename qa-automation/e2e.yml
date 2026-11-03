@@ -6,9 +6,10 @@
 # Purpose:
 #   Replays the automatable student flow from Modules 1-6 on a fresh cluster.
 #   Acts as the automated "solve" — if this passes, the lab works end to end.
-#   Console/UI-only steps (dashboard wizard, Gen AI studio, EvalHub pages,
-#   Dev Spaces interaction, VS Code Chat) are covered by the Act-phase
-#   Playwright tests and are noted below where they are skipped.
+#   Console/UI-only steps (dashboard wizard, dashboard evaluation form,
+#   Gen AI studio views, Dev Spaces interaction, VS Code Chat) are NOT
+#   automated here — they are covered by the manual checklists in
+#   qa/runs/redhat-ai-inference/ and noted below where they are skipped.
 #
 # Idempotent:
 #   Safe to re-run on a cluster where a previous run partially or fully
@@ -27,17 +28,23 @@
 #     synced by ArgoCD; this playbook never applies platform resources
 #   - Module 1: Deploy the GPT-OSS 20B (essential variant) LLMInferenceService
 #     (KServe/vLLM, 1xGPU, Kueue-managed) and verify the serving endpoint
-#   - Module 2: SKIPPED — EvalHub evaluation flows are dashboard/CLI console
-#     steps (environment-dependent evalhub CLI and pre-loaded benchmark
-#     datasets); validated via Playwright in the Act phase
+#   - Module 2: EvalHub benchmark evaluation via the evalhub CLI (the
+#     verified module-02 Ex 1 + Ex 2 + Ex 4 shape: CLI config, model-auth
+#     secret, arc_easy + truthfulqa_mc1 with the tokenizer param, results
+#     + MLflow tracking, and the repeatable config-file run). The dashboard
+#     evaluation form (Ex 3) is UI-only — manual checklist
 #   - Module 3: Verify MaaS publication (MaaSModelRef, chart-provided
 #     maas-free-subscription tier), the MaaS gateway, inference through the
 #     gateway with an API key, and Kueue quota gating (scale to 2 → the
 #     second replica stays SchedulingGated → scale back)
 #   - Module 4: Deploy the maas-chat-client app (ConfigMap + Deployment) and
 #     exercise the request loop via oc exec
-#   - Module 5: Component verification (model server + gateway + app healthy)
-#   - Module 6: User workload monitoring and observability dashboard checks
+#   - Module 5: Component verification (model server + gateway + app healthy),
+#     the model server metrics scrape (vLLM series), and the credential-
+#     failure negative test (revoke the app's API key via the MaaS API →
+#     the app fails 403 → mint a new key and restore)
+#   - Module 6: User workload monitoring and observability dashboard checks,
+#     including the vLLM series check via the UWM Prometheus federate API
 #
 # When to run:
 #   - After lab content changes to verify instructions still work
@@ -367,12 +374,18 @@
     # MODULE 1 — Deploy the model for inference
     # ========================================================================
     # Students deploy through the model serving wizard in the dashboard (UI —
-    # covered by Playwright in the Act phase). Here we apply the equivalent
+    # manual checklist module-1). Here we apply the equivalent
     # LLMInferenceService exactly as printed in the module content, then poll
     # for Ready and verify the serving endpoint with the model-tester token.
 
     - name: "M1 | VERIFY — lab user (rhods-admins) can view cluster nodes (nodes-viewer RBAC)"
-      ansible.builtin.command: oc get nodes -L nvidia.com/gpu.product --as={{ lab_user }}
+      # --as-group is required alongside --as: impersonation does not resolve
+      # OpenShift Group CRD membership (that lookup happens at login), and on
+      # a fresh cluster the lab user has no User object yet. A real lab-user
+      # token carries rhods-admins via the Group CRD, so impersonating the
+      # group reproduces the student's permissions. The check still fails if
+      # the nodes-viewer ClusterRoleBinding is missing (chart 05 file).
+      ansible.builtin.command: oc get nodes -L nvidia.com/gpu.product --as={{ lab_user }} --as-group=rhods-admins
       changed_when: false
 
     - name: "M1 | Create the student project (idempotent)"
@@ -395,6 +408,27 @@
       register: kueue_label
       failed_when: kueue_label.rc != 0
       changed_when: kueue_label.stdout is search('labeled|not labeled')
+
+    - name: "M1 | Label the project as an EvalHub evaluation tenant (module-02 Ex 1)"
+      # The EvalHub operator watches for this label and provisions the
+      # namespace's evaluation RBAC within seconds — the job service account
+      # and the evalhub service's read access to the model-auth secret
+      # (module-02 Ex 1). Without it the M2 submit fails with
+      # "secrets model-auth is forbidden" for the evalhub service.
+      ansible.builtin.command: oc label namespace {{ project_name }} evalhub.trustyai.opendatahub.io/tenant=true --overwrite
+      register: evalhub_tenant_label
+      failed_when: evalhub_tenant_label.rc != 0
+      changed_when: evalhub_tenant_label.stdout is search('labeled|not labeled')
+
+    - name: "M1 | Label the project as dashboard-generated (module-02 Ex 1)"
+      # The redhat-ods-applications default-deny ingress policy only allows
+      # namespaces with this label — without it the eval pods' status-event
+      # POSTs to the EvalHub service time out and the run stays Pending while
+      # the K8s jobs Complete (the "Pending forever" bug, checklist 2026-10-27).
+      ansible.builtin.command: oc label namespace {{ project_name }} opendatahub.io/generated-namespace=true --overwrite
+      register: generated_ns_label
+      failed_when: generated_ns_label.rc != 0
+      changed_when: generated_ns_label.stdout is search('labeled|not labeled')
 
     - name: "M1 | Polling for the auto-created LocalQueue default (retries expected, ~2 min)"
       # The DSC kueue component (autoCreateQueues: true, bootstrap
@@ -542,21 +576,189 @@
       no_log: true
 
     # ========================================================================
-    # MODULE 2 — Evaluate and benchmark with EvalHub (SKIPPED)
+    # MODULE 2 — Evaluate and benchmark with EvalHub (evalhub CLI)
     # ========================================================================
-    # Module 2 runs evaluations through the dashboard (Develop & train →
-    # Evaluations) and the evalhub CLI against a pre-loaded benchmark
-    # dataset. Both are console-driven and environment-dependent (EvalHub,
-    # TrustyAI, MLflow must be configured), so this playbook skips the
-    # module — the Act-phase Playwright tests validate the EvalHub flows
-    # against the UI.
+    # Module 2 runs evaluations through the evalhub CLI against the model
+    # deployed in Module 1. The CLI flow (module-02 Ex 1 + Ex 2) and the
+    # repeatable config-file run (Ex 4) are automated here; the dashboard
+    # evaluation form (Ex 3) is UI-only — manual checklist
+    # (qa/runs/redhat-ai-inference/module2-evalhub-checklist.md).
+    #
+    # Facts from the verified checklist (2026-10-27):
+    #   - The model URL is the LLIS status.url + /v1 (the external gateway
+    #     hostname resolves in-cluster and the eval job sidecars chain the
+    #     cert to the pod's SA ca.crt — no TLS config needed)
+    #   - The tokenizer param is MANDATORY: the served model name is not an
+    #     HF identifier, so without it the job fails with "not a valid model
+    #     identifier listed on huggingface.co"
+    #   - The docs' mmlu/hellaswag benchmark IDs DO NOT EXIST in this build
+    #     (191 benchmarks, different variants); arc_easy + truthfulqa_mc1
+    #     are the verified picks
+    #   - 10 examples per benchmark completes in ~1-2 min once the pods are
+    #     up; eval pods run as K8s Jobs in the student project (evalhub job
+    #     ID prefixed) — a Pending state is the missing namespace labels
+    #     (both set in M1), not GPU scheduling (the pods are tiny, no GPU)
+    #   - The evalhub startup-probe race (evalhub pod starting before MLflow)
+    #     breaks the DASHBOARD path only — the CLI path never calls MLflow
+    #     at job creation, so this flow is immune; do not restart evalhub
+    #     from this playbook (chart-owned resource)
 
-    - name: "M2 | SKIPPED — EvalHub flows are validated via Playwright in the Act phase"
-      ansible.builtin.debug:
-        msg: >-
-          Module 2 (EvalHub) is console/UI-driven and environment-dependent
-          (evalhub CLI, benchmark datasets); skipped here and covered by the
-          Act-phase Playwright tests.
+    - name: "M2 | VERIFY — evalhub CLI is installed (pip bootstrap if missing)"
+      ansible.builtin.shell: |
+        if command -v evalhub >/dev/null 2>&1; then
+          evalhub --version
+        else
+          python3 -m pip --version >/dev/null 2>&1 || {
+            curl -sSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+            python3 /tmp/get-pip.py --user
+          }
+          # the [cli] extra is REQUIRED: click/packaging/pyyaml/rich ship in it
+          python3 -m pip install --user "eval-hub-sdk[cli]"
+          export PATH="$HOME/.local/bin:$PATH"
+          evalhub --version
+        fi
+      register: m2_cli
+      changed_when: "'install' in m2_cli.stdout | lower"
+
+    - name: "M2 | Discover the cluster apps domain"
+      ansible.builtin.command: oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}'
+      register: cluster_domain
+      changed_when: false
+
+    - name: "M2 | Configure the evalhub CLI (idempotent)"
+      ansible.builtin.shell: |
+        evalhub config set base_url "https://evalhub-redhat-ods-applications.{{ cluster_domain.stdout | trim }}"
+        evalhub config set tenant "{{ project_name }}"
+        evalhub config set token "$(oc whoami -t)"
+        evalhub config set insecure true
+      changed_when: false
+
+    - name: "M2 | VERIFY — EvalHub service is healthy"
+      ansible.builtin.command: evalhub health
+      register: m2_health
+      until: m2_health.stdout is search('healthy')
+      retries: 5
+      delay: 10
+      changed_when: false
+
+    - name: "M2 | Create the model authentication secret (module-02 Ex 1)"
+      # The e2e flow does not create the wizard's token Secret (model-tester-
+      # <model>-sa) — the module-02 secret is created from Module 1's
+      # model-tester token instead. dry-run|apply updates the api-key each
+      # run (the M1 token is minted fresh with a 1h expiry).
+      ansible.builtin.shell: |
+        oc create secret generic model-auth \
+          --from-literal=api-key={{ model_token.stdout | trim }} \
+          -n {{ project_name }} --dry-run=client -o yaml | oc apply -f -
+      no_log: true
+      changed_when: true
+
+    - name: "M2 | Submit the benchmark evaluation and wait (module-02 Ex 2)"
+      # NOTE: no --experiment flag. The server-side get-or-create experiment
+      # call fails with MLflow 403 PERMISSION_DENIED (the evalhub server's
+      # ServiceAccount has no RBAC in the tenant namespace; verified live on
+      # k6lj7). Without the flag the run still logs to MLflow — the eval job
+      # sidecars push metrics at run time with the tenant-provisioned RBAC
+      # (checklist 2026-10-27: mlflow_run_id set on a run with no --experiment).
+      ansible.builtin.shell: |
+        evalhub eval run \
+          --name "e2e-baseline-$RANDOM" \
+          --model-url "{{ model_url.stdout | trim }}/v1" \
+          --model-name "{{ model_name }}" \
+          --provider lm_evaluation_harness \
+          -b arc_easy -b truthfulqa_mc1 \
+          --model-auth-secret model-auth \
+          --param num_examples=10 \
+          --param tokenizer=openai/gpt-oss-20b \
+          --wait --timeout 900 --format json
+      register: eval_run
+      changed_when: true
+
+    - name: "M2 | VERIFY — evaluation completed successfully"
+      ansible.builtin.assert:
+        that:
+          - eval_run.rc == 0
+          - "'completed' in eval_run.stdout"
+        fail_msg: >-
+          The benchmark evaluation did not complete — inspect it with
+          'evalhub eval status' (job pods run in {{ project_name }}; a
+          Pending state usually means the namespace labels from M1 are
+          missing or the evalhub deployment needs a restart after a fresh
+          MLflow startup — see module-02 troubleshooting).
+
+    - name: "M2 | Set the evaluation job ID from the submit output"
+      # The job ID is a full UUID (e.g. 9145a448-8541-4086-91b7-9e58d5c60856)
+      # — extracting only the first 8-hex segment 404s on the results call.
+      ansible.builtin.set_fact:
+        eval_job_id: "{{ eval_run.stdout | regex_findall('[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}') | first }}"
+      changed_when: false
+
+    - name: "M2 | VERIFY — results include the benchmark metrics"
+      ansible.builtin.shell: evalhub eval results {{ eval_job_id }} --format json
+      register: eval_results
+      until: >-
+        eval_results.rc == 0 and
+        'arc_easy' in eval_results.stdout and
+        'acc' in eval_results.stdout
+      retries: 5
+      delay: 10
+      changed_when: false
+
+    - name: "M2 | VERIFY — the run is tracked in MLflow"
+      # The results link the MLflow experiment the run is logged to; a
+      # missing link means the tracking URI lost the /mlflow static prefix
+      # (automation/gitops/maas/templates/50-evalhub.yaml) or the evalhub
+      # deployment hit the startup-probe race.
+      ansible.builtin.assert:
+        that: "'mlflow' in eval_results.stdout | lower"
+        fail_msg: >-
+          The run did not log to MLflow — check the EvalHub CR's
+          MLFLOW_TRACKING_URI carries the /mlflow static prefix (the maas
+          chart 50-evalhub.yaml) and that evalhub started after MLflow.
+
+    - name: "M2 | Ex 4 — write the repeatable evaljob config (module-02 Ex 4)"
+      # The config-file shape from module-02: benchmark parameters live under
+      # each benchmark entry (no global --param equivalent), `id:` per
+      # benchmark (NOT benchmark_id). The model URL is the LLIS status URL +
+      # /v1 — the same {inference_gateway_url}/{project}/{model}/v1 shape the
+      # module's config file prints. No experiment: section — the server-side
+      # get-or-create fails with MLflow 403 (see the Ex 2 submit note).
+      ansible.builtin.copy:
+        content: |
+          name: "e2e-config-baseline-{{ 999999 | random }}"
+          model:
+            url: "{{ model_url.stdout | trim }}/v1"
+            name: "{{ model_name }}"
+            auth:
+              secret_ref: model-auth
+          benchmarks:
+            - provider_id: lm_evaluation_harness
+              id: arc_easy
+              parameters:
+                num_examples: 10
+                tokenizer: openai/gpt-oss-20b
+            - provider_id: lm_evaluation_harness
+              id: truthfulqa_mc1
+              parameters:
+                num_examples: 10
+                tokenizer: openai/gpt-oss-20b
+        dest: /tmp/evaljob-e2e.yaml
+        mode: "0644"
+      changed_when: true
+
+    - name: "M2 | Ex 4 — submit the config-file evaluation and wait"
+      ansible.builtin.shell: |
+        evalhub eval run --config /tmp/evaljob-e2e.yaml --wait --timeout 900 --format json
+      register: eval_config_run
+      changed_when: true
+
+    - name: "M2 | Ex 4 — VERIFY — config-file evaluation completed"
+      ansible.builtin.assert:
+        that: "'completed' in eval_config_run.stdout"
+        fail_msg: >-
+          The config-file evaluation did not complete — the config shape is
+          printed in module-02 Ex 4 (parameters under each benchmark entry,
+          `id:` per benchmark).
 
     # ========================================================================
     # MODULE 3 — Expose the model as Model-as-a-Service
@@ -566,7 +768,7 @@
     # provisioned by the maas-tier chart (ArgoCD rhai-maas-tier, wave 6) —
     # the e2e verifies it and never creates subscriptions (the former manual
     # apply went stale on the gpt-oss model switch). Students verify these in
-    # the console (UI — Playwright covers the Gen AI studio views); here we
+    # the console (UI — manual checklist); here we
     # verify the resources, confirm Kueue quota gating by scaling to two
     # replicas (module-03 Ex 4), and drive inference through the MaaS
     # gateway with an API key minted via the MaaS API.
@@ -802,7 +1004,7 @@
     # MODULE 4 — Integrate the model into an application
     # ========================================================================
     # Students configure and run the maas-chat-client in Dev Spaces (UI —
-    # Playwright covers the editor flows). Here we deploy the on-cluster
+    # manual checklist module-4). Here we deploy the on-cluster
     # version exactly as in the module: the client code from a ConfigMap,
     # the endpoint URL and API key injected from the maas-credentials Secret,
     # and the request loop driven by MAAS_PROMPT / MAAS_INTERVAL.
@@ -972,11 +1174,141 @@
         | selectattr('type', 'eq', 'Available') | selectattr('status', 'eq', 'True')
         | list | length > 0)
 
+    # -- Module 5 Ex 2 / Ex 4: model server metrics scrape -------------------
+    # The module forwards the model server metrics port (pod 8000 -> local
+    # 8480) and greps the vLLM series; the pod serves its own TLS cert, so
+    # curl -sk. The series are gauges — present from server startup.
+
+    - name: "M5 | VERIFY — model server emits vLLM metrics (module-05 Ex 2)"
+      ansible.builtin.shell: |
+        MODEL_POD=$(oc get pods -n {{ project_name }} \
+          -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' \
+          | grep '^{{ model_name }}' | head -1)
+        oc port-forward -n {{ project_name }} "$MODEL_POD" 8480:8000 > /dev/null 2>&1 &
+        PF_PID=$!
+        sleep 4
+        curl -sk https://localhost:8480/metrics | grep -E 'vllm:num_requests_(running|waiting)' | head -3
+        RC=$?
+        kill $PF_PID 2>/dev/null
+        exit $RC
+      register: m5_metrics
+      until: m5_metrics.rc == 0
+      retries: 5
+      delay: 10
+      changed_when: false
+
+    # -- Module 5 Ex 3: simulated credential failure (negative test) ---------
+    # The module revokes the API key the application uses (dashboard ⋮→Revoke)
+    # and observes the failure: the app logs HTTP 403 and the model server is
+    # silent (the gateway rejected the request before forwarding it). Here the
+    # revoke is driven through the MaaS API — the API equivalent of the
+    # dialog. Fix and revert: mint a new key, patch the maas-credentials
+    # Secret (module-04 Ex 2 mechanism), roll out, verify the app recovers.
+
+    - name: "M5-Ex3 | Mint a throwaway MaaS API key for the revoke test"
+      ansible.builtin.shell: |
+        curl -sSk -X POST "{{ maas_url }}/maas-api/v1/api-keys" \
+          -H "Authorization: Bearer $(oc whoami -t)" \
+          -H "Content-Type: application/json" \
+          -d '{"name":"e2e-revoke-'$RANDOM'","expiresIn":"1h","subscription":"{{ maas_subscription_name }}"}'
+      register: revoke_mint
+      until:
+        revoke_mint.rc == 0 and
+        revoke_mint.stdout | trim | length > 0 and
+        'sk-oai-' in revoke_mint.stdout
+      retries: 5
+      delay: 15
+      changed_when: false
+      no_log: true
+
+    - name: "M5-Ex3 | Revoke the key via the MaaS API"
+      # Verified live (k6lj7): DELETE by the mint response's id (UUID) —
+      # the response echoes the key metadata and subsequent requests with
+      # the key return 403.
+      ansible.builtin.shell: |
+        curl -sSk -X DELETE "{{ maas_url }}/maas-api/v1/api-keys/{{ (revoke_mint.stdout | from_json).id }}" \
+          -H "Authorization: Bearer $(oc whoami -t)"
+      register: revoke_call
+      changed_when: true
+      no_log: true
+
+    - name: "M5-Ex3 | VERIFY — the revoked key is rejected"
+      # A revoked (bad) key surfaces as 401/403 at the gateway — the model
+      # server never sees the request. Accept either code: 401
+      # (authentication_error, bad key) or 403 (authorization_error).
+      ansible.builtin.uri:
+        url: "{{ maas_url }}/v1/models"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ (revoke_mint.stdout | from_json).key }}"
+        validate_certs: false
+        status_code: 401, 403
+      register: revoked_check
+      changed_when: false
+      no_log: true
+
+    - name: "M5-Ex3 | Break the app's credential (patch the maas-credentials Secret)"
+      # The module revokes the APP's key; the API equivalent for the e2e is
+      # replacing the Secret's key with the revoked one — the app then
+      # observes the same 403 the module describes.
+      ansible.builtin.shell: |
+        oc patch secret {{ app_secret }} -n {{ project_name }} --type merge \
+          -p '{"stringData":{"MAAS_API_KEY":"{{ (revoke_mint.stdout | from_json).key }}"}}'
+      no_log: true
+      changed_when: true
+
+    - name: "M5-Ex3 | Roll out the app with the revoked key"
+      ansible.builtin.command: oc rollout restart deploy/{{ app_name }} -n {{ project_name }}
+      changed_when: true
+
+    - name: "M5-Ex3 | Polling for the app to fail with HTTP 403 (module-05 Ex 3)"
+      ansible.builtin.command: oc logs deployment/{{ app_name }} -c chat-client -n {{ project_name }} --tail=20
+      register: m5_fail_logs
+      until: "'HTTP 403' in m5_fail_logs.stdout or 'HTTP 401' in m5_fail_logs.stdout"
+      retries: 20
+      delay: 15
+      changed_when: false
+
+    - name: "M5-Ex3 | Fix — restore the app with a fresh key (module-05 Ex 3 revert)"
+      ansible.builtin.shell: |
+        curl -sSk -X POST "{{ maas_url }}/maas-api/v1/api-keys" \
+          -H "Authorization: Bearer $(oc whoami -t)" \
+          -H "Content-Type: application/json" \
+          -d '{"name":"e2e-restore-'$RANDOM'","expiresIn":"1h","subscription":"{{ maas_subscription_name }}"}' \
+          | jq -r .key > /tmp/e2e-restore-key.txt
+        oc patch secret {{ app_secret }} -n {{ project_name }} --type merge \
+          -p "{\"stringData\":{\"MAAS_API_KEY\":\"$(cat /tmp/e2e-restore-key.txt)\"}}"
+        rm -f /tmp/e2e-restore-key.txt
+      register: m5_restore
+      until: m5_restore.rc == 0 and (m5_restore.stdout | trim | length) > 0
+      retries: 5
+      delay: 15
+      changed_when: true
+      no_log: true
+
+    - name: "M5-Ex3 | Roll out the app with the fresh key"
+      ansible.builtin.command: oc rollout restart deploy/{{ app_name }} -n {{ project_name }}
+      changed_when: true
+
+    - name: "M5-Ex3 | Polling for the app to recover (module-05 Ex 3 revert)"
+      ansible.builtin.command: >-
+        oc exec deploy/{{ app_name }} -c chat-client -n {{ project_name }} --
+        python3 -c "import sys; sys.path.insert(0, '/opt/client'); import maas_chat_client as c;
+        model = c.MODEL or c.discover_model();
+        comp = c.chat_completions(model, [{'role': 'system', 'content': c.SYSTEM},
+        {'role': 'user', 'content': 'Reply with the single word OK.'}], max_tokens=16);
+        print(comp['choices'][0]['message']['content'])"
+      register: m5_recover
+      until: m5_recover.rc == 0 and m5_recover.stdout | trim | length > 0
+      retries: 10
+      delay: 15
+      changed_when: false
+
     # ========================================================================
     # MODULE 6 — Monitor model performance through observability
     # ========================================================================
-    # Students explore the Cluster and Usage dashboards (UI — Playwright
-    # captures those views). The automated equivalent verifies the metric
+    # Students explore the Cluster and Usage dashboards (UI — manual
+    # checklists). The automated equivalent verifies the metric
     # pipelines behind the dashboard are active: user workload monitoring is
     # enabled (namespace + Prometheus pods), the observability dashboard flag
     # is on, and the model server pods (the scrape target — vLLM engine
@@ -1027,6 +1359,30 @@
         | selectattr('metadata.name', 'match', '^' ~ model_name)
         | selectattr('status.phase', 'equalto', 'Running') | list | length == 0
 
+    - name: "M6 | VERIFY — vLLM series are queryable in UWM Prometheus (federate)"
+      # The UWM Prometheus query API is not exposed (9091/9092 are
+      # kube-rbac-proxy ports allowing only /metrics and /federate) — the
+      # /federate endpoint with a series match is the query path. Port-forward
+      # the service and fetch the vLLM series for the student namespace; the
+      # M4 request loop guarantees the scrape target has traffic.
+      ansible.builtin.shell: |
+        oc port-forward -n openshift-user-workload-monitoring \
+          svc/prometheus-user-workload 19092:9092 > /dev/null 2>&1 &
+        PF_PID=$!
+        sleep 4
+        curl -sSk -G -H "Authorization: Bearer $(oc whoami -t)" \
+          'https://localhost:19092/federate' \
+          --data-urlencode 'match[]={__name__=~"vllm:.*",namespace="{{ project_name }}"}' \
+          | grep -c '^vllm:'
+        RC=$?
+        kill $PF_PID 2>/dev/null
+        exit $RC
+      register: m6_federate
+      until: m6_federate.rc == 0 and (m6_federate.stdout | trim | int) > 0
+      retries: 10
+      delay: 15
+      changed_when: false
+
     # ========================================================================
     # FINAL — Summary
     # ========================================================================
@@ -1034,9 +1390,12 @@
     - name: "E2E complete"
       ansible.builtin.debug:
         msg: >-
-          Preflight + Modules 1, 3-6 executed and verified successfully:
-          platform signals converged, model serving endpoint, MaaS gateway
-          inference (maas-free-subscription tier), Kueue quota gating,
-          application request loop, and observability pipelines are all
-          healthy. Module 2 (EvalHub) is validated via Playwright in the Act
-          phase.
+          Preflight + Modules 1-6 executed and verified successfully:
+          platform signals converged, model serving endpoint, EvalHub
+          benchmark evaluation (CLI + config-file runs, MLflow tracked),
+          MaaS gateway inference (maas-free-subscription tier), Kueue quota
+          gating, application request loop, metrics scrape + credential-
+          failure negative test, and observability pipelines are all healthy.
+          The dashboard-only steps (wizard, dashboard evaluation form, Gen AI
+          studio views, Dev Spaces editor) are covered by the manual
+          checklists in qa/runs/redhat-ai-inference/.

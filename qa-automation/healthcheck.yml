@@ -10,10 +10,11 @@
 #     /stream/qa/healthcheck
 #
 # Scope:
-#   Only checks resources deployed by provisioning automation: RHOAI 3.5
-#   (DataScienceCluster), the GPU worker node, the RHOAI dashboard route,
-#   and the MaaS API. Does NOT check anything students deploy during the
-#   lab (model, app) — the e2e.yml playbook validates those after the lab.
+#   Only checks resources deployed by provisioning automation: RHOAI 3.6-ea2
+#   (DataScienceCluster, EvalHub, MLflow), the GPU worker node, the RHOAI
+#   dashboard route, and the MaaS API. Does NOT check anything students
+#   deploy during the lab (model, app) — the e2e.yml playbook validates
+#   those after the lab.
 #
 # When it runs:
 #   - Triggered by ops via the ZT Runner /stream/qa/healthcheck endpoint
@@ -49,7 +50,7 @@
       ansible.builtin.command: oc whoami
       changed_when: false
 
-    # -- Check 2: OpenShift AI platform (RHOAI 3.5) --------------------------
+    # -- Check 2: OpenShift AI platform (RHOAI 3.6-ea2) -----------------------
     # The DataScienceCluster represents the installed OpenShift AI components
     # (`oc get dsc` in the lab). Model serving in Module 1 depends on it
     # reporting Ready — accept either the phase or the Ready condition.
@@ -100,7 +101,7 @@
         dashboard_route.resources | length == 0 or
         dashboard_route.resources[0].status.ingress | default([]) | length == 0
 
-    # -- Check 5: MaaS API (RHOAI 3.5) ---------------------------------------
+    # -- Check 5: MaaS API (RHOAI 3.6-ea2) ------------------------------------
     # The MaaS API (maas-api) runs in redhat-ods-applications. The external
     # gateway endpoint (maas.apps.<cluster-domain>) is validated end-to-end
     # by the e2e playbook (Module 3), not here — this check only confirms
@@ -115,3 +116,37 @@
         maas_services.resources | length == 0 or
         maas_services.resources
         | selectattr('metadata.name', 'match', '^maas') | list | length == 0
+
+    # -- Check 6: EvalHub server (RHOAI 3.6-ea2) -----------------------------
+    # Module 2 runs evaluations through the EvalHub service (the Evaluations
+    # page and the evalhub CLI both talk to it). The deployment is
+    # provisioned by the maas chart; Module 2 depends on it being Running.
+    - name: EvalHub deployment is Running in redhat-ods-applications
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: evalhub
+        namespace: redhat-ods-applications
+      register: evalhub_dep
+      failed_when: >-
+        evalhub_dep.resources | length == 0 or
+        not (evalhub_dep.resources[0].status.conditions | default([])
+        | selectattr('type', 'eq', 'Available') | selectattr('status', 'eq', 'True')
+        | list | length > 0)
+
+    # -- Check 7: MLflow server (RHOAI 3.6-ea2) ------------------------------
+    # Module 2 logs evaluation runs to MLflow (the eval jobs' sidecars push
+    # metrics to the tracking URI in the EvalHub CR). The deployment is
+    # provisioned by the maas chart alongside EvalHub.
+    - name: MLflow deployment is Running in redhat-ods-applications
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: mlflow
+        namespace: redhat-ods-applications
+      register: mlflow_dep
+      failed_when: >-
+        mlflow_dep.resources | length == 0 or
+        not (mlflow_dep.resources[0].status.conditions | default([])
+        | selectattr('type', 'eq', 'Available') | selectattr('status', 'eq', 'True')
+        | list | length > 0)
