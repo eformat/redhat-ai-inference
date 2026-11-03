@@ -1,0 +1,60 @@
+---
+# Read-only gateway access for the rhods-admins group (the lab user). Module
+# 5's core skill is layer-by-layer log inspection — its trace and gateway
+# checks read the MaaS gateway's istio-proxy access log and pod list in the
+# system `openshift-ingress` namespace:
+#
+#   oc logs -n openshift-ingress deployment/maas-default-gateway-istio \
+#     -c istio-proxy --tail=20
+#   oc get pods -n openshift-ingress | grep maas-default-gateway
+#
+# `openshift-ingress` is a system namespace — the lab user has no rights
+# there and gets Forbidden ("User lab-user1 cannot get resource deployments
+# in API group apps in the namespace openshift-ingress"), which breaks the
+# Module 5 trace. This Role grants exactly the read verbs those commands
+# need, in `openshift-ingress` ONLY (a namespaced Role, not a ClusterRole —
+# the rights stop at the namespace boundary), bound to the admin group the
+# same way as the project-namespace-labeller grant (rhoai tier). Wave 2: the
+# same wave as the maas-default-gateway block this supports.
+#
+# Scope note: the verbs are deliberately minimal — pods get/list (the
+# gateway-routing check and oc logs' pod resolution), pods/log get (the
+# istio-proxy access log), deployments get/list (oc logs deployment/...).
+# No write verbs, no other resources: the lab user can read but not touch
+# the cluster's ingress infrastructure.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: maas-gateway-log-reader
+  namespace: openshift-ingress
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "2"
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rhods-admins-maas-gateway-log-reader
+  namespace: openshift-ingress
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: maas-gateway-log-reader
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: rhods-admins
