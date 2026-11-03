@@ -53,7 +53,10 @@ Send one request and follow it through every layer:
 
 . Open the application interface and send a request that triggers an inference call. Note the response — this is your *baseline*. Copy it now: Exercise 4 compares against it to prove the chain is still healthy after the failure simulations.
 
-. Inspect the application logs to confirm the outbound request was sent:
+. Inspect the application logs to confirm the outbound request was sent. Run
+the `oc` commands in this module from your Dev Spaces terminal with
+`lab-user-dev` as the current project (`oc project lab-user-dev` if you opened
+a new terminal since Module 4):
 
 [source,bash,role="execute"]
 ----

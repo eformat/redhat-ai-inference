@@ -260,7 +260,7 @@ dialog in Module 3 (shape: `https://maas.apps.<cluster-domain>/`). Do not add
 ====
 Run these commands in the same terminal session you plan to use in section
 4.4, so the variables remain available. If you open a new terminal, re-run
-the export block first.
+the export block and `oc project lab-user-dev` first.
 ====
 
 Validate both values before moving on — a healthy endpoint returns HTTP 200
@@ -273,6 +273,16 @@ curl -s -o /dev/null -w "%{http_code}\n" "${MAAS_URL}/v1/models" \
   -H "Authorization: Bearer ${MAAS_API_KEY}"
 ----
 
+The `oc` commands in this module create resources in your lab project,
+`lab-user-dev` — the namespace that holds your model and MaaS resources from
+Modules 1–3. Dev Spaces terminals start in the workspace's own project
+(`lab-user1-devspaces`), so switch to your lab project first:
+
+[source,role="execute"]
+----
+oc project lab-user-dev
+----
+
 The on-cluster deployment reads its configuration from a Secret rather than
 plain environment variables. Create it from the same exported values — this
 avoids re-typing the endpoint URL and key, which is where typos creep in:
@@ -280,13 +290,16 @@ avoids re-typing the endpoint URL and key, which is where typos creep in:
 [source,role="execute"]
 ----
 oc create secret generic maas-credentials \
-  --from-literal=MAAS_URL="${MAAS_URL}" \
-  --from-literal=MAAS_API_KEY="${MAAS_API_KEY}"
+  --from-literal=MAAS_URL="${MAAS_URL:?re-run the export block first}" \
+  --from-literal=MAAS_API_KEY="${MAAS_API_KEY:?re-run the export block first}"
 ----
+
+The `:?` guard fails the command with a clear message if the exports are
+empty, instead of silently creating a Secret with empty values.
 
 [NOTE]
 ====
-The Secret lives in your current project alongside the application. Never
+The Secret lives in `lab-user-dev` alongside the application. Never
 commit the API key to a repository or paste it into the deployment manifest —
 the Secret is the only place the key is stored.
 ====
@@ -345,8 +358,9 @@ Exercise 3, even though both consume the same endpoint and the same API key.
 .5 minutes
 
 With configuration in place, deploy the client to the OpenShift cluster. The
-pod runs in your own project and reaches the MaaS endpoint over the cluster
-network — the endpoint you verified in Module 3 is reachable in-cluster too.
+pod runs in your lab project (`lab-user-dev`) alongside your model and reaches
+the MaaS endpoint over the cluster network — the endpoint you verified in
+Module 3 is reachable in-cluster too.
 
 The `deploy/deployment.yaml` manifest in the workspace mounts the client code
 from a ConfigMap and injects configuration from the `maas-credentials` Secret
@@ -426,6 +440,24 @@ maas-chat-client-7d9f8b6c5-kq9xz   1/1     Running   0          25s
 ----
 
 Pod names vary; press `Ctrl+C` once the pod reports `Running 1/1`.
+
+[TIP]
+====
+If the pod shows `Error` with restarts climbing and its log says `Set
+MAAS_URL and MAAS_API_KEY before starting the client`, the Secret was created
+from empty exported variables — the exports were not set in the terminal that
+ran `oc create secret`. Re-run the export block, re-create the Secret, and
+restart the rollout — the next pod picks up the corrected values:
+
+[source,role="execute"]
+----
+oc delete secret maas-credentials
+oc create secret generic maas-credentials \
+  --from-literal=MAAS_URL="${MAAS_URL}" \
+  --from-literal=MAAS_API_KEY="${MAAS_API_KEY}"
+oc rollout restart deployment/maas-chat-client
+----
+====
 
 [NOTE]
 ====
