@@ -20,9 +20,14 @@
 #    landed).
 # 3. RBAC + EvalHub CR — mirrors the proven prelude-nightly-35 pattern:
 #    proxy-access Role/RoleBinding for all authenticated users, the aggregated
-#    evaluator ClusterRole, and the EvalHub CR (sqlite — the CRD's documented
-#    lightweight path; for postgresql the CRD requires a pre-composed db-url
-#    key in the referenced secret, else the server pod fails FailedMount).
+#    evaluator ClusterRole, and the EvalHub CR (postgresql — evaluation
+#    history must survive evalhub pod restarts: sqlite is IN-MEMORY and drops
+#    it, which also made the workspace-probe restart destructive. The CRD has
+#    NO sqlite+PVC option — postgresql requires a pre-composed db-url key in
+#    the referenced secret, else the server pod fails FailedMount). The
+#    separate `evalhub` database is created by the evalhub-db-init Job
+#    (wave 2) in the existing postgres instance — NOT the maas database,
+#    which the MaaS stack owns via maas-db-config.
 apiVersion: components.platform.opendatahub.io/v1alpha1
 kind: TrustyAI
 metadata:
@@ -35,6 +40,63 @@ spec:
   enabledServices:
     evalHub: true
     nemoGuardrails: true
+---
+# EvalHub database init — the evalhub DB is a SEPARATE database from the MaaS
+# one (both live in the same postgres instance; the maas database is owned by
+# the MaaS stack via maas-db-config). The RHEL postgres image only creates
+# POSTGRESQL_DATABASE (maas) on first boot and the PVC already carries data,
+# so init scripts won't re-run — this Job creates the `evalhub` database
+# idempotently. Wave 2: the internal wait loop tolerates the postgres pod
+# still rolling out (same wave), and ArgoCD gates wave 3 (the EvalHub CR with
+# the postgresql db-url) on this Job completing — Jobs are Healthy when
+# complete.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: evalhub-db-init
+  namespace: redhat-ods-applications
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  backoffLimit: 20
+  template:
+    metadata:
+      labels:
+        app: evalhub-db-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init
+          image: registry.redhat.io/rhel9/postgresql-16:latest
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-creds
+                  key: POSTGRES_USER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-creds
+                  key: POSTGRES_PASSWORD
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+              # The postgres deployment may still be rolling out in the same
+              # wave — wait for it to accept connections.
+              until pg_isready -h postgres -p 5432 -U "$POSTGRES_USER" -q; do
+                echo "waiting for postgres"; sleep 5
+              done
+              # Idempotent: create the evalhub database only if missing.
+              if psql -h postgres -U "$POSTGRES_USER" -d maas -tAc \
+                  "SELECT 1 FROM pg_database WHERE datname='evalhub'" | grep -q 1; then
+                echo "evalhub database already exists"
+              else
+                psql -h postgres -U "$POSTGRES_USER" -d maas -c "CREATE DATABASE evalhub"
+                echo "evalhub database created"
+              fi
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -108,6 +170,20 @@ rules:
   verbs:
   - get
 ---
+# The evalhub database connection URL — the CRD requires a pre-composed
+# `db-url` key in the referenced secret. Composed from the chart's postgres
+# values (dummy lab-internal credentials, pool pattern — no real secrets).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: evalhub-db-url
+  namespace: redhat-ods-applications
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+type: Opaque
+stringData:
+  db-url: "postgresql://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@postgres.redhat-ods-applications.svc.cluster.local:5432/evalhub"
+---
 apiVersion: trustyai.opendatahub.io/v1alpha1
 kind: EvalHub
 metadata:
@@ -126,7 +202,11 @@ spec:
       # null (the runs never log to MLflow).
       value: "https://mlflow.redhat-ods-applications.svc.cluster.local:8443/mlflow"
   database:
-    type: sqlite
+    # PostgreSQL — see the header: sqlite is in-memory and drops evaluation
+    # history on every pod restart. The evalhub database is created by the
+    # evalhub-db-init Job (wave 2).
+    type: postgresql
+    secret: evalhub-db-url
   providers:
     - lm-evaluation-harness
     - garak
