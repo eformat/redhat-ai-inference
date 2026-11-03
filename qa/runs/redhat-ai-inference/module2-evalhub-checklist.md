@@ -121,6 +121,42 @@ placeholder URLs that do not match the 9B deployment. Rebuild: verify → write
       the dashboard's Experiments page (Experiments → <experiment> →
       Evaluation runs) showing the runs with metrics — pairs with Exercise 4.
 
+## MLflow root cause #2 — startup-probe race (2026-11-03, ocp.nrdlv.sandbox4468)
+
+- [x] NEW FAILURE MODE, different from the 10-27 URI bug: the tracking URI
+      IS correct here (has the `/mlflow` prefix) — the dashboard eval
+      submission fails with `mlflow_request_failed` / "Workspace context is
+      required for this request" (400) on
+      `experiments/get-by-name` because the request has NO
+      `X-MLFLOW-WORKSPACE` header (verified: the same call with the header
+      from inside the evalhub pod → 404 experiment-not-found = API success).
+- [x] ROOT CAUSE — STARTUP-ORDERING RACE: the eval-hub server probes
+      `GET <tracking-uri>/api/3.0/mlflow/server-info` ONCE at startup and
+      caches the result for the pod's lifetime. The evalhub pod started
+      21:22:51/53; the MLflow server container started 21:23:12 (19s later,
+      mid-crashloop, 3 restarts) → the probe failed `connect: connection
+      refused` → `workspaces_enabled: false` cached → every MLflow call goes
+      out header-less → MLflow (workspace-ENABLED) rejects with 400. Evalhub
+      startup logs: "Could not probe MLflow workspace support; workspace
+      headers will not be sent ... connection refused". Re-probing now
+      returns 200 `workspaces_enabled: true`.
+- [x] WHY THE CLI FLOW STILL WORKED: the CLI submission path does NOT call
+      MLflow at job creation (job created in 3ms, code 202, no get-by-name);
+      the DASHBOARD path resolves the experiment via get-by-name at creation
+      → 400. The eval jobs' SIDECARS probe at their own startup (when MLflow
+      is up) → they send the header → run-time logging is unaffected.
+- [x] FIX: `oc rollout restart deploy/evalhub -n redhat-ods-applications` —
+      the startup probe then hits a live MLflow (`workspaces_enabled: true`),
+      the client caches enabled and sends `X-MLFLOW-WORKSPACE`; the dashboard
+      eval creation works. Running eval jobs are unaffected (separate pods).
+- [ ] DURABLE MITIGATION (upstream/fresh clusters): this is a deployment-
+      ordering race on every fresh cluster — ArgoCD sync-waves order APPLIES,
+      not readiness, so the evalhub server can start before MLflow serves.
+      Candidate fixes: eval-hub re-probing per-request/retrying (upstream),
+      an initContainer wait for MLflow in the operator's deployment template,
+      or documenting "restart the evalhub deployment" in module-02
+      troubleshooting for the `mlflow_request_failed` error.
+
 ## Screenshots — DONE (2026-10-27, all 1600x900 real captures)
 
 - [x] `201-evaluations-page.png`: the Evaluations page (/evaluation) with the

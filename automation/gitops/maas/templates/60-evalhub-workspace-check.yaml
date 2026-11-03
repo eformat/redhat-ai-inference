@@ -1,0 +1,132 @@
+---
+# EvalHub workspace-probe check. The eval-hub server probes MLflow's
+# server-info ONCE at startup and caches workspaces_enabled for the pod's
+# lifetime (eval-hub mlflow/mlflow.go:125-139). On fresh clusters the evalhub
+# pod can start BEFORE the MLflow server is serving (ArgoCD sync-waves order
+# applies, not readiness) — the probe fails with "connection refused", the
+# server caches workspaces_enabled=false, and every MLflow call then goes out
+# without the X-MLFLOW-WORKSPACE header. MLflow (workspace-ENABLED) rejects
+# those with 400 "Workspace context is required for this request" — the
+# DASHBOARD eval flow fails at CreateEvaluationJob (the CLI path skips MLflow
+# at job creation, so only the dashboard is affected; the eval jobs' sidecars
+# probe at their own startup and are unaffected).
+#
+# The lab user cannot restart the evalhub deployment (no RBAC in
+# redhat-ods-applications), so this hook runs as a privileged SA: wait for
+# MLflow to be Available, read the evalhub pod's cached startup-probe result
+# from its logs, and delete the pod if the probe failed — the ReplicaSet
+# recreates it and the fresh probe succeeds against a live MLflow. Pod
+# deletion (not a deployment annotation) keeps the ArgoCD diff clean.
+# PostSync + HookSucceeded delete-policy: re-runs on every sync so the race
+# is also caught if a later evalhub restart lands while MLflow is down.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: evalhub-workspace-check
+  namespace: redhat-ods-applications
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: evalhub-workspace-check
+  namespace: redhat-ods-applications
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, delete]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: evalhub-workspace-check
+  namespace: redhat-ods-applications
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: evalhub-workspace-check
+subjects:
+  - kind: ServiceAccount
+    name: evalhub-workspace-check
+    namespace: redhat-ods-applications
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: evalhub-workspace-check
+  namespace: redhat-ods-applications
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      labels:
+        app: evalhub-workspace-check
+    spec:
+      serviceAccountName: evalhub-workspace-check
+      restartPolicy: OnFailure
+      containers:
+        - name: check
+          image: registry.redhat.io/openshift4/ose-cli:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+              NS=redhat-ods-applications
+              SEL="app=eval-hub,component=api"
+              # 1. Wait for the MLflow deployment to be Available — the evalhub
+              #    startup probe races this on fresh clusters.
+              oc -n $NS rollout status deploy/mlflow --timeout=900s
+              # 2. Wait for the evalhub pod (created by the operator from the
+              #    EvalHub CR).
+              POD=""
+              for i in $(seq 1 60); do
+                POD="$(oc -n $NS get pod -l "$SEL" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+                [ -n "$POD" ] && break
+                echo "waiting for the evalhub pod ($i/60)"; sleep 10
+              done
+              [ -n "$POD" ] || { echo "evalhub pod never appeared"; exit 1; }
+              # 3. The startup probe logs its cached result once — wait for the
+              #    marker in the pod logs (either true or false).
+              MARKER=""
+              for i in $(seq 1 30); do
+                MARKER="$(oc -n $NS logs "$POD" 2>/dev/null | grep -o 'workspaces_enabled":true\|workspaces_enabled":false' | tail -1 || true)"
+                [ -n "$MARKER" ] && break
+                echo "waiting for the evalhub startup probe log ($i/30)"; sleep 5
+              done
+              [ -n "$MARKER" ] || { echo "no workspace probe marker in the evalhub logs"; exit 1; }
+              echo "evalhub cached: $MARKER"
+              # 4. Cached false = the pod started before MLflow served. Delete
+              #    the pod — the ReplicaSet recreates it and the fresh probe
+              #    succeeds against a live MLflow (verified in step 1). The
+              #    evalhub DB is in-memory, so a restart drops evaluation
+              #    history — at PostSync bootstrap time there is none to lose.
+              if [ "$MARKER" = 'workspaces_enabled":false' ]; then
+                echo "evalhub cached workspaces_enabled=false — deleting the pod for a fresh probe"
+                oc -n $NS delete pod "$POD"
+                for i in $(seq 1 60); do
+                  NEW="$(oc -n $NS get pod -l "$SEL" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+                  if [ -n "$NEW" ] && [ "$NEW" != "$POD" ] \
+                      && oc -n $NS logs "$NEW" 2>/dev/null | grep -q 'workspaces_enabled":true'; then
+                    echo "fresh evalhub probe OK (workspaces_enabled=true)"
+                    exit 0
+                  fi
+                  echo "waiting for the fresh evalhub probe ($i/60)"; sleep 10
+                done
+                echo "fresh evalhub pod never reported workspaces enabled"; exit 1
+              fi
+              echo "evalhub workspace probe is healthy"

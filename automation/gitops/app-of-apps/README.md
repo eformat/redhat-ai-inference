@@ -10,7 +10,7 @@ as an app-of-apps. The root application (named `bootstrap`) points at
 | `rhai-operators` | `operators/` | 0 | 31 | Namespaces, catalog source, ICSP, OperatorGroups, Subscriptions, NFD ClusterPolicy |
 | `rhai-rhoai` | `rhoai/` | 1 | 7 | DSCInitialization, DataScienceCluster, CheCluster, dashboard configs, rhods-admins group |
 | `rhai-operator-configs` | `operator-configs/` | 2 | 4 | Kueue/LWS/JobSet operator configs + model-serving ClusterQueue |
-| `rhai-maas` | `maas/` | 3 | 21 | Postgres DB, maas-default-gateway + status Job, MLflow, EvalHub, Kuadrant/Authorino, TelemetryPolicy |
+| `rhai-maas` | `maas/` | 3 | 25 | Postgres DB, maas-default-gateway + status Job, MLflow, EvalHub, Kuadrant/Authorino, TelemetryPolicy, evalhub workspace-probe check (PostSync hook — restarts the evalhub pod if its cached MLflow workspace probe failed; the startup race breaks the dashboard eval flow) |
 | `rhai-model-serving` | `model-serving/` | 4 | 9 | gpu-serving HardwareProfile, accelerator config, openshift-ai-inference gateway |
 | `rhai-observability` | `observability/` | 5 | 2 | Perses datasource, network policy |
 | `rhai-maas-tier` | `maas-tier/` | 6 | 2 | MaaS governance tier — lab-model subscription + authpolicy in `models-as-a-service` (Failed until Module 3, converges when the student's MaaSModelRef lands; learners have no RBAC to create here, so the tier is provisioned, never a learner step) |
