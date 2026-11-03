@@ -193,23 +193,25 @@ NAME                          URL   READY   AGE
 redhataigpt-oss-20b-essential             True    45m
 ----
 
-. *Metrics endpoints.* The model server exposes Prometheus metrics on port `8080` at `/metrics`. Forward the port and scrape it:
+. *Metrics endpoints.* The model server exposes Prometheus metrics over HTTPS
+on port `8000` at `/metrics` — the pod serves its own TLS certificate, hence
+the `-k` below. Forward the port and scrape it:
 
 [source,bash,role="execute",subs="specialcharacters,attributes"]
 ----
 # Terminal 1 — forward the model server metrics port
-oc port-forward -n {project-namespace} ${MODEL_POD} 8480:8080
+oc port-forward -n {project-namespace} ${MODEL_POD} 8480:8000
 
-# Terminal 2 — scrape the endpoint
-curl -s localhost:8480/metrics | head -5
+# Terminal 2 — scrape the endpoint (HTTPS — the pod serves its TLS cert)
+curl -sk https://localhost:8480/metrics | head -5
 ----
 
 Expected output (vLLM metric series):
 
 ----
-# HELP vllm:num_requests_running Number of requests currently running on GPU.
+# HELP vllm:num_requests_running Number of requests in model execution batches.
 # TYPE vllm:num_requests_running gauge
-vllm:num_requests_running{model_name="publishers/{project-namespace}/models/redhataigpt-oss-20b-essential"} 0.0
+vllm:num_requests_running{engine="0",model_name="redhataigpt-oss-20b-essential"} 0.0
 ----
 
 [NOTE]
@@ -343,7 +345,7 @@ After restoring from the failure, prove the serving chain is back to its baselin
 
 [source,bash,role="execute"]
 ----
-curl -s localhost:8480/metrics | grep -E 'vllm:num_requests_(running|waiting)|success_total' | head -5
+curl -sk https://localhost:8480/metrics | grep -E 'vllm:num_requests_(running|waiting)|success_total' | head -5
 ----
 
 Expected output: live metric series with updated counter values.
