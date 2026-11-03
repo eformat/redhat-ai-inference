@@ -10,7 +10,7 @@
 #     /stream/qa/healthcheck
 #
 # Scope:
-#   Only checks resources deployed by provisioning automation: RHOAI 3.5
+#   Only checks resources deployed by provisioning automation: RHOAI 3.6-ea2
 #   (DataScienceCluster), the GPU worker node, the RHOAI dashboard route,
 #   and the MaaS API. Does NOT check anything students deploy during the
 #   lab (model, app) — the e2e.yml playbook validates those after the lab.
@@ -41,6 +41,14 @@
   module_defaults:
     group/kubernetes.core.k8s:
       kubeconfig: "{{ k8s_kubeconfig | default(omit) }}"
+  # The runtime-automation ServiceAccount's kubeconfig must reach `oc` too,
+  # not just the kubernetes.core.k8s* modules. Without this, shell-based
+  # checks fall back to the pod's own in-cluster identity while the k8s
+  # modules use the elevated one — two different identities in one playbook.
+  # Mirrors the environment block in e2e.yml.
+  environment:
+    KUBECONFIG: "{{ k8s_kubeconfig | default(omit) }}"
+    K8S_AUTH_KUBECONFIG: "{{ k8s_kubeconfig | default(omit) }}"
   tasks:
 
     # -- Check 1: Can we reach the cluster at all, and is the session -------
@@ -49,7 +57,7 @@
       ansible.builtin.command: oc whoami
       changed_when: false
 
-    # -- Check 2: OpenShift AI platform (RHOAI 3.5) --------------------------
+    # -- Check 2: OpenShift AI platform (RHOAI 3.6-ea2) ----------------------
     # The DataScienceCluster represents the installed OpenShift AI components
     # (`oc get dsc` in the lab). Model serving in Module 1 depends on it
     # reporting Ready — accept either the phase or the Ready condition.
@@ -70,21 +78,43 @@
     # -- Check 3: GPU worker node --------------------------------------------
     # Module 1 schedules the model server on the NVIDIA L4 24 GB GPU node
     # (`oc get nodes -L nvidia.com/gpu.product`). At least one node must
-    # advertise nvidia.com/gpu capacity greater than zero.
-    - name: GPU worker node advertises NVIDIA GPU capacity
+    # advertise nvidia.com/gpu capacity greater than zero AND be Ready.
+    #
+    # Capacity alone is not enough: a NotReady node still reports its
+    # capacity, so a capacity-only check goes green on a cluster where the
+    # GPU node cannot actually accept the Module 1 workload. The two
+    # conditions must be evaluated per node — a cluster-wide "some node is
+    # Ready, some node has a GPU" test would pass when those are different
+    # nodes.
+    - name: Get cluster nodes
       kubernetes.core.k8s_info:
         api_version: v1
         kind: Node
       register: nodes
-      failed_when: >-
-        nodes.resources | length == 0 or
-        nodes.resources
-        | map(attribute='status.capacity')
-        | map('dict2items')
-        | flatten
-        | selectattr('key', 'equalto', 'nvidia.com/gpu')
-        | map(attribute='value')
-        | map('int') | select('gt', 0) | list | length == 0
+      failed_when: nodes.resources | length == 0
+
+    - name: Identify nodes that are Ready and advertise NVIDIA GPU capacity
+      ansible.builtin.set_fact:
+        ready_gpu_nodes: "{{ (ready_gpu_nodes | default([])) + [item.metadata.name] }}"
+      loop: "{{ nodes.resources }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
+      when:
+        - ((item.status.capacity | default({}))['nvidia.com/gpu'] | default(0) | int) > 0
+        - item.status.conditions | default([])
+          | selectattr('type', 'eq', 'Ready')
+          | selectattr('status', 'eq', 'True')
+          | list | length > 0
+
+    - name: GPU worker node is Ready and advertises NVIDIA GPU capacity
+      ansible.builtin.assert:
+        that:
+          - (ready_gpu_nodes | default([])) | length > 0
+        fail_msg: >-
+          No Ready node advertises nvidia.com/gpu capacity. Module 1 cannot
+          schedule the model server. Check the GPU machineset and that the
+          NVIDIA GPU operator has finished labelling the node.
+        success_msg: "Ready GPU node(s): {{ (ready_gpu_nodes | default([])) | join(', ') }}"
 
     # -- Check 4: RHOAI dashboard route --------------------------------------
     # Students log in and land on the RHOAI dashboard (Getting Connected).
@@ -100,18 +130,23 @@
         dashboard_route.resources | length == 0 or
         dashboard_route.resources[0].status.ingress | default([]) | length == 0
 
-    # -- Check 5: MaaS API (RHOAI 3.5) ---------------------------------------
-    # The MaaS API (maas-api) runs in redhat-ods-applications. The external
-    # gateway endpoint (maas.apps.<cluster-domain>) is validated end-to-end
-    # by the e2e playbook (Module 3), not here — this check only confirms
-    # the API is deployed.
-    - name: MaaS API service is present in redhat-ods-applications
+    # -- Check 5: MaaS API (RHOAI 3.6-ea2) -----------------------------------
+    # The MaaS API (maas-api) runs in redhat-ai-gateway-infra, NOT in
+    # redhat-ods-applications. redhat-ods-applications holds only the MaaS
+    # *operator* (maas-controller-metrics, maas-controller-webhook-service);
+    # a prior `^maas` name match against that namespace matched the operator
+    # webhook and went green even when the MaaS API itself was absent or
+    # broken. Module 3 depends on the API, not the operator — so name the
+    # service and namespace exactly rather than pattern-matching.
+    #
+    # The external gateway endpoint (maas.apps.<cluster-domain>) is validated
+    # end-to-end by the e2e playbook (Module 3), not here — this check only
+    # confirms the API is deployed.
+    - name: MaaS API service is present in redhat-ai-gateway-infra
       kubernetes.core.k8s_info:
         api_version: v1
         kind: Service
-        namespace: redhat-ods-applications
-      register: maas_services
-      failed_when: >-
-        maas_services.resources | length == 0 or
-        maas_services.resources
-        | selectattr('metadata.name', 'match', '^maas') | list | length == 0
+        name: maas-api
+        namespace: redhat-ai-gateway-infra
+      register: maas_api
+      failed_when: maas_api.resources | length == 0
