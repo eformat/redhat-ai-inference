@@ -169,14 +169,17 @@ evalhub eval run \
   --provider lm_evaluation_harness \
   -b arc_easy -b truthfulqa_mc1 \
   --model-auth-secret model-auth \
+  --experiment gpt-oss-20b-baseline \
   --param num_examples=10 \
   --param tokenizer=openai/gpt-oss-20b
 ----
 
-The server accepts the job and returns a job ID, and logs the run to an MLflow
-experiment named after the evaluation. Without the tokenizer parameter the job
-fails with `not a valid model identifier listed on huggingface.co` — always
-pass it for models served from a modelcar.
+The server accepts the job and returns a job ID, and logs the run to the
+MLflow experiment named by `--experiment` — it is created on first use.
+Without `--experiment` the run still completes and appears on the
+*Evaluations* page, but its metrics are never tracked in MLflow. Without the
+tokenizer parameter the job fails with `not a valid model identifier listed
+on huggingface.co` — always pass it for models served from a modelcar.
 
 image::202d-eval-submitted.png[The evalhub CLI confirming the evaluation job was submitted with a job ID,link=self,window=blank,width=700]
 
@@ -326,15 +329,24 @@ model:
   name: redhataigpt-oss-20b-essential
   auth:
     secret_ref: model-auth
+experiment:
+  name: gpt-oss-20b-baseline
 benchmarks:
   - provider_id: lm_evaluation_harness
     id: arc_easy
+    parameters:
+      num_examples: 10
+      tokenizer: openai/gpt-oss-20b
   - provider_id: lm_evaluation_harness
     id: truthfulqa_mc1
-parameters:
-  num_examples: 10
-  tokenizer: openai/gpt-oss-20b
+    parameters:
+      num_examples: 10
+      tokenizer: openai/gpt-oss-20b
 ----
+
+Benchmark parameters live under each benchmark entry — the config file path
+has no global `--param` equivalent, so each benchmark carries the same
+`tokenizer` and `num_examples` the CLI passed inline.
 
 Re-triggering the identical evaluation is then a single command:
 
@@ -349,8 +361,9 @@ image::204b-config-run.png[The evalhub CLI confirming the repeatable evaluation 
 
 * *Job fails with `not a valid model identifier listed on huggingface.co`* —
 the tokenizer parameter is missing. Pass `--param
-tokenizer=openai/gpt-oss-20b` (CLI) or add it under
-*Benchmark parameters* (dashboard).
+tokenizer=openai/gpt-oss-20b` (CLI), add it under
+*Benchmark parameters* (dashboard), or under each benchmark's
+`parameters` in the config file.
 * *Run marked `Failed` immediately with `reading model auth secret ...
 forbidden`, or stays `Pending` forever while the benchmark jobs complete* —
 the project namespace is not registered as an evaluation tenant (the
